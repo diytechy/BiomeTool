@@ -1,0 +1,23 @@
+Note: This prompt relates to the same Terra project that was discussed previously in C:\Projects\terra-origen.
+
+Goal: Fix or build a new tool to visualize pack files for the Minecraft Terra plugin.
+C:\JAVA\jdk-23\bin\java -jar BiomeTool-0.4.9-all.jar
+Currently trying to use the official tool, "BiomeTool" (https://github.com/PolyhedralDev/BiomeTool) but it is resulting in errors. 
+
+##Option 1: Help to debug the command "C:\JAVA\jdk-23\bin\java -jar BiomeTool-0.4.9-win.jar" run out of "C:\Projects\BiomeTool\build\libs" resulting in the error 'Message: No such com.dfsek.terra.api.addon.BaseAddon matching "biome-provider-pipeline" was found in this registry.' and fix dependencies in the build process.
+
+This is occuring when the jar executable is attempting to load C:\Projects\BiomeTool\build\libs\v\packs\Overworld as it automatically attempts to read all packs in the "\packs" folder in it's root directory on startup.
+
+The BiomeTool can be recompiled via "C:\Projects\BiomeTool\Gradlew.bat".
+
+Note the pipeline handler is pulled in through the build.gradle.kts build definition file, and here it lists multiple modules to pull in based on their hash version (terraGitHash = "af9fb211a").  If I attempt to change that to a newer available hash (like fd6decc70) There are newer modules available (specifically biome-provider-pipeline 2.0.0) but other dependencies then fail.  It appears the sister project which uses the same modules (C:\Projects\Terra) has an updated gradle process which builds the modules locally instead of trying to pull them from maven.
+
+Based on what I see there are two paths forward to fix the build:
+
+A. Just copy over build dependenciesthat were already built as a part of C:\Projects\Terra to an appropriate location , and change the gradle scripts to load those local resources instead of trying to get the package from a web repository.
+
+B. Update the build process so that C:\Projects\BiomeTool constructs it's dependencies the same way C:\Projects\Terra.
+
+IMPORTANT: It appears the key dependencies which are not getting met are by author dfsek.
+
+##Option 2: A likely much more difficult path would be to try and reimpliment the funcitonality of C:\Projects\BiomeTool in the form of a python package, which would read the pack file, parse the biome distribution, expressions, and colors, and attempt to render that biome distribution in a similar fashion to what the C:\Projects\BiomeTool\build\libs\BiomeTool-0.4.9-win.jar is attempting to do.
