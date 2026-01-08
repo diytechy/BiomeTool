@@ -168,13 +168,39 @@ implementation("com.dfsek.terra:base:7.0.0-BETA+$terraGitHash")
 - **Local Maven cache**: No Terra artifacts present yet (`~/.m2/repository/com/dfsek/terra/` does not exist)
 - **BiomeTool expects hash**: `af9fb211a` (significantly older)
 
-## Next Steps
+## Resolution (Completed 2026-01-08)
 
-1. Build Terra: `cd C:\Projects\Terra && .\gradlew.bat build publishToMavenLocal`
-2. Verify artifacts in `~/.m2/repository/com/dfsek/terra/`
-3. Update BiomeTool's `build.gradle.kts`:
-   - Add `mavenLocal()` as first repository
-   - Change `terraGitHash` from `af9fb211a` to `116453772`
-   - Update `base` version from `6.6.2-BETA` to `7.0.0-BETA`
-   - Update addon versions as needed
-4. Attempt BiomeTool build and document any API compatibility errors
+The issue has been resolved using **Option 1A** (local Maven publication).
+
+### Steps Taken
+
+1. **Built Terra's addon modules** and published to local Maven:
+   ```bash
+   cd C:\Projects\Terra
+   .\publish_to_maven_local.bat
+   ```
+   (This script publishes core API, base implementation, and all 35 addon modules)
+
+2. **Updated BiomeTool's `build.gradle.kts`**:
+   - Added `mavenLocal()` as first repository
+   - Added Solo Studios repository: `https://maven.solo-studios.ca/releases`
+   - Changed `terraGitHash` from `af9fb211a` to `116453772`
+   - Updated `base` version from `6.6.2-BETA` to `7.0.0-BETA`
+   - Updated addon versions (removed v2- prefixed addons, updated biome-provider-image/pipeline to 2.0.0)
+
+3. **Fixed API compatibility issue** in `BiomeToolPlatform.kt`:
+   - Changed `rawConfigRegistry.loadAll(this)` to `loadConfigPacks()`
+   - The `ConfigRegistry.loadAll()` signature changed from returning `boolean` to `void`
+
+### Verification
+
+BiomeTool now:
+- Compiles successfully
+- Loads all 34 Terra addons (including biome-provider-pipeline)
+- Parses config packs correctly
+- Runs the JavaFX GUI without errors
+
+### Files Modified
+
+- `C:\Projects\BiomeTool\build.gradle.kts` - Updated dependencies and repositories
+- `C:\Projects\BiomeTool\src\main\kotlin\com\dfsek\terra\biometool\BiomeToolPlatform.kt` - Fixed reload() method
