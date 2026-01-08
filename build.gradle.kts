@@ -19,7 +19,12 @@ version = "0.4.9"
 val runDir = file("$buildDir/run")
 
 repositories {
+    mavenLocal()  // Use locally published Terra artifacts first
     mavenCentral()
+    maven {
+        name = "Solo Studios"
+        url = uri("https://maven.solo-studios.ca/releases")
+    }
     maven {
         name = "CodeMC"
         url = uri("https://repo.codemc.org/repository/maven-public/")
@@ -99,15 +104,13 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
 
-    val terraGitHash = "af9fb211a"
+    val terraGitHash = "116453772"
 
     bootstrapTerraAddon("com.dfsek.terra:api-addon-loader:0.1.0-BETA+$terraGitHash")
     bootstrapTerraAddon("com.dfsek.terra:manifest-addon-loader:1.0.0-BETA+$terraGitHash")
     terraAddon("com.dfsek.terra:biome-provider-extrusion:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:biome-provider-image:1.0.1-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:biome-provider-image:v2-1.0.1-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:biome-provider-pipeline:1.0.2-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:biome-provider-pipeline:v2-1.0.1-BETA+$terraGitHash")
+    terraAddon("com.dfsek.terra:biome-provider-image:2.0.0-BETA+$terraGitHash")
+    terraAddon("com.dfsek.terra:biome-provider-pipeline:2.0.0-BETA+$terraGitHash")
     terraAddon("com.dfsek.terra:biome-provider-single:1.0.0-BETA+$terraGitHash")
     terraAddon("com.dfsek.terra:biome-query-api:1.0.0-BETA+$terraGitHash")
     terraAddon("com.dfsek.terra:chunk-generator-noise-3d:1.2.1-BETA+$terraGitHash")
@@ -142,7 +145,7 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 
-    implementation("com.dfsek.terra:base:6.6.2-BETA+$terraGitHash")
+    implementation("com.dfsek.terra:base:7.0.0-BETA+$terraGitHash")
 
     implementation("ca.solo-studios:slf4k:0.5.4")
 
