@@ -57,6 +57,7 @@ import kotlin.random.Random
 import kotlin.system.exitProcess
 
 enum class SurfaceMode(val displayName: String) {
+    DEFAULT("Default"),
     SURFACE("Surface"),
     SUBSURFACE("Subsurface")
 }
@@ -276,9 +277,9 @@ class BiomeToolView : View("Biome Tool") {
     
     private fun getSelectedSurfaceMode(): SurfaceMode {
         return try {
-            surfaceModeSelection.selectedItem ?: SurfaceMode.SURFACE
+            surfaceModeSelection.selectedItem ?: SurfaceMode.DEFAULT
         } catch (e: Exception) {
-            SurfaceMode.SURFACE
+            SurfaceMode.DEFAULT
         }
     }
 
