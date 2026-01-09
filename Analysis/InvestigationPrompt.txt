@@ -121,3 +121,5 @@ Ex: The stages that comes from preset C:\Projects\BiomeTool\build\libs\packs\ter
         - << biome-distribution/stages/add_trenches.yml:stages
 		
 Ideally this should create another render tab below these selections.  Today that tab shows with a title form of "PACK:PRESET:SEED", and I would like that to instead  say "PACK:PRESET:SEED:SURFACE_SELECTION".
+
+This will likely require intercepting the preset definition and modifying to before it is injected into the biome processor, but that is an assumption from my side.
