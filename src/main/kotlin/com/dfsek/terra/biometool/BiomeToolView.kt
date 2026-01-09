@@ -57,9 +57,9 @@ import kotlin.random.Random
 import kotlin.system.exitProcess
 
 enum class SurfaceMode(val displayName: String) {
-    DEFAULT("Default"),
     SURFACE("Surface"),
-    SUBSURFACE("Subsurface")
+    SUBSURFACE("Subsurface"),
+    DEFAULT("Legacy")
 }
 
 class BiomeToolView : View("Biome Tool") {
@@ -277,9 +277,9 @@ class BiomeToolView : View("Biome Tool") {
     
     private fun getSelectedSurfaceMode(): SurfaceMode {
         return try {
-            surfaceModeSelection.selectedItem ?: SurfaceMode.DEFAULT
+            surfaceModeSelection.selectedItem ?: SurfaceMode.SURFACE
         } catch (e: Exception) {
-            SurfaceMode.DEFAULT
+            SurfaceMode.SURFACE
         }
     }
 
@@ -312,16 +312,16 @@ class BiomeToolView : View("Biome Tool") {
         return when (mode) {
             SurfaceMode.DEFAULT -> {
                 val effectiveProvider = getSurfaceProvider(provider)
-                effectiveProvider.getBiome(x, 300, z, seed).id
+                effectiveProvider.getBiome(x, 0, z, seed).id
             }
             SurfaceMode.SURFACE -> {
                 val effectiveProvider = getSurfaceProvider(provider)
-                effectiveProvider.getBiome(x, 0, z, seed).id
+                effectiveProvider.getBiome(x, 300, z, seed).id
             }
             SurfaceMode.SUBSURFACE -> {
                 // Multi-Y sampling - find cave biome
                 val surfaceBiome = provider.getBiome(x, 300, z, seed)
-                val yLevels = listOf(-60, -30, 0, 30, 60, 90, 120, 150, 180, 210, 240, 270)
+                val yLevels = listOf(270, 240, 210, 180,150, 120, 90, 60, 30, 0, -30, -60)
                 for (y in yLevels) {
                     val biome = provider.getBiome(x, y, z, seed)
                     if (biome.id != surfaceBiome.id) {

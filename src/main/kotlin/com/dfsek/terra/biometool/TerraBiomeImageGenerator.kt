@@ -74,17 +74,15 @@ class TerraBiomeImageGenerator(
 
         // Get surface biome (without extrusions) to determine land vs ocean
         val surfaceProvider = getSurfaceProvider(provider)
-        val surfaceBiome = surfaceProvider.getBiome(x, 0, z, seed)
+        val surfaceBiome = surfaceProvider.getBiome(x, 300, z, seed)
         val isOcean = isOceanBiome(surfaceBiome)
-
-        // Get biome at depth - if extrusion changed it, it's a cave
-        val deepBiome = provider.getBiome(x, -50, z, seed)
-
-        // If the deep biome differs from surface, extrusion applied = cave biome
-        if (deepBiome.id != surfaceBiome.id) {
-            return deepBiome.color
+        val yLevels = listOf(270, 240, 210, 180,150, 120, 90, 60, 30, 0, -30, -60)
+        for (y in yLevels) {
+            val biome = provider.getBiome(x, y, z, seed)
+            if (biome.id != surfaceBiome.id) {
+                return biome.color
+            }
         }
-
         // No extrusion applied - show simplified land/ocean
         return if (isOcean) OCEAN_COLOR else LAND_COLOR
     }
