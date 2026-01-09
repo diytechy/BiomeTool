@@ -253,7 +253,7 @@ tasks.withType<Jar>() {
             "Built-By" to System.getProperties()["user.name"],
             "Built-Jdk" to System.getProperties()["java.version"],
             "Name" to project.name,
-            "Add-Opens" to "javafx.graphics/javafx.scene",
+            "Add-Opens" to "javafx.graphics/javafx.scene java.base/sun.misc",
         )
     }
 }
@@ -316,11 +316,37 @@ tasks.getByName<JavaExec>("run") {
 
     workingDir = runDir
     @Suppress("UselessCallOnNotNull") // Thanks Kotlin
-    jvmArgs = jvmArgs.orEmpty() + listOf("--add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED")
+    jvmArgs = jvmArgs.orEmpty() + listOf(
+        "--add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED",
+        "--add-opens=java.base/sun.misc=ALL-UNNAMED"
+    )
+}
+
+val createLauncherScripts by tasks.creating {
+    group = "distribution"
+    description = "Creates launcher scripts for standalone JAR execution"
+
+    doLast {
+        // Windows batch script
+        file("$buildDir/libs/BiomeTool.bat").writeText("""
+@echo off
+setlocal
+set "SCRIPT_DIR=%~dp0"
+java --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=java.base/sun.misc=ALL-UNNAMED -jar "%SCRIPT_DIR%BiomeTool-${project.version}-win.jar" %*
+endlocal
+""".trimIndent())
+
+        // Unix shell script
+        file("$buildDir/libs/BiomeTool.sh").writeText("""
+#!/bin/bash
+SCRIPT_DIR="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
+java --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=java.base/sun.misc=ALL-UNNAMED -jar "${'$'}SCRIPT_DIR/BiomeTool-${project.version}-linux.jar" "${'$'}@"
+""".trimIndent())
+    }
 }
 
 tasks.build {
     dependsOn(javadocJar, sourcesJar)
     dependsOn(project.tasks.withType<ShadowJar>())
-    finalizedBy(prepareDistAddons)
+    finalizedBy(prepareDistAddons, createLauncherScripts)
 }
