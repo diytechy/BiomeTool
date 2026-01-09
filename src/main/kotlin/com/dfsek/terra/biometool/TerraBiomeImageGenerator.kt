@@ -23,7 +23,7 @@ class TerraBiomeImageGenerator(
         when (surfaceMode) {
             SurfaceMode.DEFAULT -> configPack.biomeProvider
             SurfaceMode.SURFACE -> getSurfaceProvider(configPack.biomeProvider)
-            SurfaceMode.SUBSURFACE -> getSubsurfaceProvider(configPack.biomeProvider)
+            SurfaceMode.SUBSURFACE -> configPack.biomeProvider
         }
     }
 
@@ -35,19 +35,6 @@ class TerraBiomeImageGenerator(
                 getDelegateMethod.invoke(provider) as BiomeProvider
             } else {
                 provider
-            }
-        } catch (e: Exception) {
-            provider
-        }
-    }
-
-    private fun getSubsurfaceProvider(provider: BiomeProvider): BiomeProvider {
-        return try {
-            val providerClass = provider::class.java
-            if (providerClass.simpleName == "BiomeExtrusionProvider") {
-                provider
-            } else {
-                providerClass.simpleName = "XXX_NOT_CAVE_BIOME_NOT_CAVE_XXX"
             }
         } catch (e: Exception) {
             provider
@@ -91,15 +78,11 @@ class TerraBiomeImageGenerator(
         val isOcean = isOceanBiome(surfaceBiome)
 
         // Get biome at depth - if extrusion changed it, it's a cave
-        //val deepBiome = provider.getBiome(x, -50, z, seed)
+        val deepBiome = provider.getBiome(x, -50, z, seed)
 
         // If the deep biome differs from surface, extrusion applied = cave biome
-        //if (deepBiome.id != surfaceBiome.id) {
-        //    return deepBiome.color
-        //}
-
-        if (surfaceProvider.simpleName != "XXX_NOT_CAVE_BIOME_NOT_CAVE_XXX") {
-            return surfaceBiome.color
+        if (deepBiome.id != surfaceBiome.id) {
+            return deepBiome.color
         }
 
         // No extrusion applied - show simplified land/ocean
