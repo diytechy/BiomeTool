@@ -1,6 +1,7 @@
 package com.dfsek.terra.biometool
 
 import com.dfsek.terra.api.config.ConfigPack
+import com.dfsek.terra.api.world.biome.Biome
 import com.dfsek.terra.api.world.biome.generation.BiomeProvider
 import com.dfsek.terra.biometool.map.MapTilePoint
 import javafx.scene.image.Image
@@ -12,6 +13,12 @@ class TerraBiomeImageGenerator(
     private val surfaceMode: SurfaceMode = SurfaceMode.SURFACE,
 ) : BiomeImageGenerator {
 
+    companion object {
+        // Simplified colors for subsurface base layer
+        private const val LAND_COLOR = 0xFF228B22.toInt()  // Forest green
+        private const val OCEAN_COLOR = 0xFF000080.toInt() // Navy blue
+    }
+
     private val effectiveProvider: BiomeProvider by lazy {
         when (surfaceMode) {
             SurfaceMode.SURFACE -> getSurfaceProvider(configPack.biomeProvider)
@@ -20,8 +27,6 @@ class TerraBiomeImageGenerator(
     }
 
     private fun getSurfaceProvider(provider: BiomeProvider): BiomeProvider {
-        // Use reflection to check for BiomeExtrusionProvider and get delegate
-        // This avoids hard dependency on the addon class at load time
         return try {
             val providerClass = provider::class.java
             if (providerClass.simpleName == "BiomeExtrusionProvider") {
@@ -31,7 +36,6 @@ class TerraBiomeImageGenerator(
                 provider
             }
         } catch (e: Exception) {
-            // If reflection fails, just use the original provider
             provider
         }
     }
@@ -65,18 +69,32 @@ class TerraBiomeImageGenerator(
 
     private fun getSubsurfaceBiomeColor(x: Int, z: Int): Int {
         val provider = configPack.biomeProvider
-        val surfaceBiome = provider.getBiome(x, 0, z, seed)
 
-        // Check multiple Y levels, prioritize deepest different biome
-        val yLevels = listOf(-60, -30)
+        // Get surface biome to determine land vs ocean
+        val surfaceBiome = provider.getBiome(x, 0, z, seed)
+        val isOcean = isOceanBiome(surfaceBiome)
+
+        // Check multiple Y levels for cave biomes
+        val yLevels = listOf(-60, -45, -30, -15)
         for (y in yLevels) {
-            val biome = provider.getBiome(x, y, z, seed)
-            if (biome.id != surfaceBiome.id) {
-                return biome.color
+            val deepBiome = provider.getBiome(x, y, z, seed)
+            // If the deep biome is different from surface, it's a cave biome
+            if (deepBiome.id != surfaceBiome.id) {
+                return deepBiome.color
             }
         }
 
-        // No cave found, return surface biome color
-        return surfaceBiome.color
+        // No cave found - show simplified land/ocean
+        return if (isOcean) OCEAN_COLOR else LAND_COLOR
+    }
+
+    private fun isOceanBiome(biome: Biome): Boolean {
+        val id = biome.id.lowercase()
+        return id.contains("ocean") ||
+               id.contains("sea") ||
+               id.contains("water") ||
+               id.contains("river") ||
+               id.contains("beach") ||
+               id.contains("shore")
     }
 }
