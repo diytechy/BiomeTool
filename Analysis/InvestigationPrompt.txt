@@ -21,3 +21,11 @@ B. Update the build process so that C:\Projects\BiomeTool constructs it's depend
 IMPORTANT: It appears the key dependencies which are not getting met are by author dfsek.
 
 ##Option 2: A likely much more difficult path would be to try and reimpliment the funcitonality of C:\Projects\BiomeTool in the form of a python package, which would read the pack file, parse the biome distribution, expressions, and colors, and attempt to render that biome distribution in a similar fashion to what the C:\Projects\BiomeTool\build\libs\BiomeTool-0.4.9-win.jar is attempting to do.
+
+## Post fix:
+
+The map does work, but there is a nuascance error that appears in the console as well as in "C:\Projects\Terra":
+
+ERROR com.dfsek.seismic.util.ReflectionUtils           - Field theUnsafe not found in class sun.misc.Unsafe
+
+Can you resolve this error both in "C:\Projects\Terra" and in "C:\Projects\BiomeTool"?
