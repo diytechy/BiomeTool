@@ -4,44 +4,30 @@ import com.dfsek.terra.api.config.ConfigPack
 import com.dfsek.terra.biometool.map.MapTilePoint
 import javafx.scene.image.Image
 import javafx.scene.image.WritableImage
-import javafx.scene.paint.Color
 
 class TerraBiomeImageGenerator(
     override val seed: Long,
     override val configPack: ConfigPack,
                               ) : BiomeImageGenerator {
-    override suspend fun generateBiomeImage(point: MapTilePoint, tileSize: Int): Image {
-        val (x, y) = point
+    override suspend fun generateBiomeImage(point: MapTilePoint, tileSize: Int, lod: Int): Image {
+        val (tileX, tileY) = point
         
         val provider = configPack.biomeProvider
-        val img = makeTileImage(tileSize)
+        val sampleStep = 1 shl lod
+        val imageSize = tileSize / sampleStep
         
+        val img = WritableImage(imageSize, imageSize)
         val pixelWriter = img.pixelWriter
         
-        val data = Array(tileSize) { xi ->
-            IntArray(tileSize) { yi ->
-                provider.getBiome(x * tileSize + xi, 0, y * tileSize + yi, seed).color
+        val worldX = tileX * tileSize
+        val worldY = tileY * tileSize
+        
+        for (xi in 0 until imageSize) {
+            for (yi in 0 until imageSize) {
+                val color = provider.getBiome(worldX + xi * sampleStep, 0, worldY + yi * sampleStep, seed).color
+                pixelWriter.setArgb(xi, yi, color)
             }
         }
-        
-        
-        data.forEachIndexed { xi: Int, arr: IntArray ->
-            arr.forEachIndexed { zi: Int, color: Int? ->
-                if (color != null)
-                    pixelWriter.setArgb(xi, zi, color)
-            }
-        }
-        
-        return img
-    }
-    
-    private fun makeTileImage(tileSize: Int): WritableImage {
-        val img = WritableImage(tileSize, tileSize)
-        val writer = img.pixelWriter
-        
-        for (x in 0 until tileSize)
-            for (y in 0 until tileSize)
-                writer.setColor(x, y, Color.BLACK)
         
         return img
     }

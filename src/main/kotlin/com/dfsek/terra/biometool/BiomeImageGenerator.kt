@@ -8,5 +8,5 @@ interface BiomeImageGenerator {
     val seed: Long
     val configPack: ConfigPack
     
-    suspend fun generateBiomeImage(point: MapTilePoint, tileSize: Int): Image
+    suspend fun generateBiomeImage(point: MapTilePoint, tileSize: Int, lod: Int = 0): Image
 }
