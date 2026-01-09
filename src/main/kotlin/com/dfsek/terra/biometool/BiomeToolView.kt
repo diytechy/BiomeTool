@@ -310,14 +310,18 @@ class BiomeToolView : View("Biome Tool") {
     private fun getBiomeForMode(pack: ConfigPack, x: Int, z: Int, seed: Long, mode: SurfaceMode): String {
         val provider = pack.biomeProvider
         return when (mode) {
+            SurfaceMode.DEFAULT -> {
+                val effectiveProvider = getSurfaceProvider(provider)
+                effectiveProvider.getBiome(x, 300, z, seed).id
+            }
             SurfaceMode.SURFACE -> {
                 val effectiveProvider = getSurfaceProvider(provider)
                 effectiveProvider.getBiome(x, 0, z, seed).id
             }
             SurfaceMode.SUBSURFACE -> {
                 // Multi-Y sampling - find cave biome
-                val surfaceBiome = provider.getBiome(x, 0, z, seed)
-                val yLevels = listOf(-60, -30, 0)
+                val surfaceBiome = provider.getBiome(x, 300, z, seed)
+                val yLevels = listOf(-60, -30, 0, 30, 60, 90, 120, 150, 180, 210, 240, 270)
                 for (y in yLevels) {
                     val biome = provider.getBiome(x, y, z, seed)
                     if (biome.id != surfaceBiome.id) {

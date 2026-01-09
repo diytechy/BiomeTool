@@ -59,7 +59,7 @@ class TerraBiomeImageGenerator(
                 val z = worldY + yi * sampleStep
                 val color = when (surfaceMode) {
                     SurfaceMode.DEFAULT -> configPack.biomeProvider.getBiome(x, 0, z, seed).color
-                    SurfaceMode.SURFACE -> effectiveProvider.getBiome(x, 0, z, seed).color
+                    SurfaceMode.SURFACE -> configPack.biomeProvider.getBiome(x, 300, z, seed).color
                     SurfaceMode.SUBSURFACE -> getSubsurfaceBiomeColor(x, z)
                 }
                 pixelWriter.setArgb(xi, yi, color)
