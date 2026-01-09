@@ -153,6 +153,9 @@ dependencies {
 
     implementation("com.google.guava:guava:33.4.8-jre")
 
+    // NBT library required by structure-sponge-loader addon
+    implementation("com.github.Querz:NBT:6.1")
+
     implementation("no.tornado:tornadofx:1.7.20") {
         exclude("org.jetbrains.kotlin")
     }
