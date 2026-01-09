@@ -56,6 +56,10 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlin.system.exitProcess
 
+enum class SurfaceMode(val displayName: String) {
+    SURFACE("Surface"),
+    SUBSURFACE("Subsurface")
+}
 
 class BiomeToolView : View("Biome Tool") {
     private val logger by getLogger()
@@ -67,7 +71,9 @@ class BiomeToolView : View("Biome Tool") {
     private var seed by singleAssign<TextField>()
     
     private var packSelection by singleAssign<ComboBox<RegistryKey>>()
-    
+
+    private var surfaceModeSelection by singleAssign<ComboBox<SurfaceMode>>()
+
     private var renderTabs by singleAssign<TabPane>()
     
     private val consoleTextArea: TextArea = textarea {
@@ -160,11 +166,20 @@ class BiomeToolView : View("Biome Tool") {
                         
                         packSelection = combobox {
                             val configs = platform.configRegistry.keys().toList()
-                            
+
                             items = configs.toObservable()
                             selectionModel.selectFirst()
                         }
-                        
+
+                        label("View") {
+                            padding = Insets(0.0, 0.0, 0.0, 8.0)
+                        }
+
+                        surfaceModeSelection = combobox {
+                            items = SurfaceMode.values().toList().toObservable()
+                            selectionModel.selectFirst()
+                        }
+
                         button("Rerender") {
                             action {
                                 addBiomeViewTab()
@@ -211,7 +226,11 @@ class BiomeToolView : View("Biome Tool") {
                     }
                     
                     if (packSelection.selectedItem != null) {
-                        addBiomeViewTab(selectedPack = packSelection.selectedItem!!, seedLong = random.nextLong())
+                        addBiomeViewTab(
+                            selectedPack = packSelection.selectedItem!!,
+                            seedLong = random.nextLong(),
+                            surfaceMode = SurfaceMode.SURFACE
+                        )
                     }
                 }
             }
@@ -255,27 +274,72 @@ class BiomeToolView : View("Biome Tool") {
         exitProcess(0)
     }
     
+    private fun getSelectedSurfaceMode(): SurfaceMode {
+        return try {
+            surfaceModeSelection.selectedItem ?: SurfaceMode.SURFACE
+        } catch (e: Exception) {
+            SurfaceMode.SURFACE
+        }
+    }
+
     private fun addBiomeViewTab(
         selectedPack: RegistryKey = packSelection.selectedItem!!,
         pack: ConfigPack = platform.configRegistry[selectedPack].get(),
         seedLong: Long = seed.text.toLong(),
-                               ): Tab {
-        return renderTabs.tab("$selectedPack:$seedLong") {
+        surfaceMode: SurfaceMode? = null,
+    ): Tab {
+        val effectiveSurfaceMode = surfaceMode ?: getSelectedSurfaceMode()
+        val modeLabel = effectiveSurfaceMode.displayName
+        return renderTabs.tab("$selectedPack:$seedLong:$modeLabel") {
             select()
-            
-            val mapView = mapview(BiomeToolView.scope, TerraBiomeImageGenerator(seedLong, pack), 128) {
+
+            val mapView = mapview(BiomeToolView.scope, TerraBiomeImageGenerator(seedLong, pack, effectiveSurfaceMode), 128) {
                 fitToParentSize()
             }
             mapView.setOnMouseMoved {
                 val worldX = (mapView.x + it.x / mapView.zoom).roundToInt()
                 val worldZ = (mapView.y + it.y / mapView.zoom).roundToInt()
-                
+
                 coordsLabel.text = "$worldX, $worldZ"
-                biomeID.text = mapView.configPack
-                    .biomeProvider
-                    .getBiome(worldX, 0, worldZ, mapView.seed)
-                    .id
+                biomeID.text = getBiomeForMode(pack, worldX, worldZ, mapView.seed, effectiveSurfaceMode)
             }
+        }
+    }
+
+    private fun getBiomeForMode(pack: ConfigPack, x: Int, z: Int, seed: Long, mode: SurfaceMode): String {
+        val provider = pack.biomeProvider
+        return when (mode) {
+            SurfaceMode.SURFACE -> {
+                val effectiveProvider = getSurfaceProvider(provider)
+                effectiveProvider.getBiome(x, 0, z, seed).id
+            }
+            SurfaceMode.SUBSURFACE -> {
+                // Multi-Y sampling - find cave biome
+                val surfaceBiome = provider.getBiome(x, 0, z, seed)
+                val yLevels = listOf(-60, -30, 0)
+                for (y in yLevels) {
+                    val biome = provider.getBiome(x, y, z, seed)
+                    if (biome.id != surfaceBiome.id) {
+                        return biome.id
+                    }
+                }
+                surfaceBiome.id
+            }
+        }
+    }
+
+    private fun getSurfaceProvider(provider: com.dfsek.terra.api.world.biome.generation.BiomeProvider): com.dfsek.terra.api.world.biome.generation.BiomeProvider {
+        // Use reflection to check for BiomeExtrusionProvider and get delegate
+        return try {
+            val providerClass = provider::class.java
+            if (providerClass.simpleName == "BiomeExtrusionProvider") {
+                val getDelegateMethod = providerClass.getMethod("getDelegate")
+                getDelegateMethod.invoke(provider) as com.dfsek.terra.api.world.biome.generation.BiomeProvider
+            } else {
+                provider
+            }
+        } catch (e: Exception) {
+            provider
         }
     }
     
