@@ -70,21 +70,20 @@ class TerraBiomeImageGenerator(
     private fun getSubsurfaceBiomeColor(x: Int, z: Int): Int {
         val provider = configPack.biomeProvider
 
-        // Get surface biome to determine land vs ocean
-        val surfaceBiome = provider.getBiome(x, 0, z, seed)
+        // Get surface biome (without extrusions) to determine land vs ocean
+        val surfaceProvider = getSurfaceProvider(provider)
+        val surfaceBiome = surfaceProvider.getBiome(x, 0, z, seed)
         val isOcean = isOceanBiome(surfaceBiome)
 
-        // Check multiple Y levels for cave biomes
-        val yLevels = listOf(-60, -45, -30, -15)
-        for (y in yLevels) {
-            val deepBiome = provider.getBiome(x, y, z, seed)
-            // If the deep biome is different from surface, it's a cave biome
-            if (deepBiome.id != surfaceBiome.id) {
-                return deepBiome.color
-            }
+        // Get biome at depth - if extrusion changed it, it's a cave
+        val deepBiome = provider.getBiome(x, -50, z, seed)
+
+        // If the deep biome differs from surface, extrusion applied = cave biome
+        if (deepBiome.id != surfaceBiome.id) {
+            return deepBiome.color
         }
 
-        // No cave found - show simplified land/ocean
+        // No extrusion applied - show simplified land/ocean
         return if (isOcean) OCEAN_COLOR else LAND_COLOR
     }
 
@@ -95,6 +94,7 @@ class TerraBiomeImageGenerator(
                id.contains("water") ||
                id.contains("river") ||
                id.contains("beach") ||
-               id.contains("shore")
+               id.contains("shore") ||
+               id.contains("trench")
     }
 }
