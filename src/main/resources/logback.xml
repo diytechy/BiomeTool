@@ -66,6 +66,9 @@
         </encoder>
     </appender>
 
+    <!-- Suppress known Seismic reflection error (uses getField instead of getDeclaredField for private field) -->
+    <logger level="OFF" name="com.dfsek.seismic.util.ReflectionUtils"/>
+
     <logger level="DEBUG" name="com.dfsek.terra" additivity="false">
         <appender-ref ref="STDOUT"/>
         <appender-ref ref="FILE"/>
