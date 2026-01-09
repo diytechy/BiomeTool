@@ -1,4 +1,4 @@
-rootProject.name = "BiomeTool"
+rootProject.name = "BiomeToolEnhanced"
 
 // settings.gradle.kts
 val isCiServer = System.getenv().containsKey("CI")
