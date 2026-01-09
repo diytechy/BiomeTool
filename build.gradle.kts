@@ -253,7 +253,7 @@ tasks.withType<Jar>() {
             "Built-By" to System.getProperties()["user.name"],
             "Built-Jdk" to System.getProperties()["java.version"],
             "Name" to project.name,
-            "Add-Opens" to "javafx.graphics/javafx.scene java.base/sun.misc",
+            "Add-Opens" to "javafx.graphics/javafx.scene jdk.unsupported/sun.misc",
         )
     }
 }
@@ -318,7 +318,7 @@ tasks.getByName<JavaExec>("run") {
     @Suppress("UselessCallOnNotNull") // Thanks Kotlin
     jvmArgs = jvmArgs.orEmpty() + listOf(
         "--add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED",
-        "--add-opens=java.base/sun.misc=ALL-UNNAMED"
+        "--add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED"
     )
 }
 
@@ -332,7 +332,7 @@ val createLauncherScripts by tasks.creating {
 @echo off
 setlocal
 set "SCRIPT_DIR=%~dp0"
-java --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=java.base/sun.misc=ALL-UNNAMED -jar "%SCRIPT_DIR%BiomeTool-${project.version}-win.jar" %*
+java --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED -jar "%SCRIPT_DIR%BiomeTool-${project.version}-win.jar" %*
 endlocal
 """.trimIndent())
 
@@ -340,7 +340,7 @@ endlocal
         file("$buildDir/libs/BiomeTool.sh").writeText("""
 #!/bin/bash
 SCRIPT_DIR="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
-java --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=java.base/sun.misc=ALL-UNNAMED -jar "${'$'}SCRIPT_DIR/BiomeTool-${project.version}-linux.jar" "${'$'}@"
+java --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED -jar "${'$'}SCRIPT_DIR/BiomeTool-${project.version}-linux.jar" "${'$'}@"
 """.trimIndent())
     }
 }
