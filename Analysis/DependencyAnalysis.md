@@ -204,3 +204,24 @@ BiomeTool now:
 
 - `C:\Projects\BiomeTool\build.gradle.kts` - Updated dependencies and repositories
 - `C:\Projects\BiomeTool\src\main\kotlin\com\dfsek\terra\biometool\BiomeToolPlatform.kt` - Fixed reload() method
+- `C:\Projects\Terra\publish_to_maven_local.bat` - New script to publish Terra modules to local Maven
+
+### Additional Fixes
+
+1. **Standalone JAR addon distribution**: Added `prepareDistAddons` task to copy addon JARs to `build/libs/addons/` so the standalone JAR works without `gradlew run`.
+
+2. **Missing NBT library**: Added `com.github.Querz:NBT:6.1` as a direct dependency - required by the `structure-sponge-loader` addon.
+
+### Running BiomeTool
+
+**Via Gradle:**
+```bash
+cd C:\Projects\BiomeTool
+.\gradlew.bat run
+```
+
+**Standalone JAR:**
+```bash
+cd C:\Projects\BiomeTool\build\libs
+C:\JAVA\jdk-23\bin\java -jar BiomeTool-0.4.9-win.jar
+```
