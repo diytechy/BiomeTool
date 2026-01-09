@@ -159,6 +159,11 @@ class InternalMap(
         Platform.requestNextPulse()
     }
     
+    fun cancelAllJobs() {
+        pendingJobs.values.forEach { it.cancel() }
+        pendingJobs.clear()
+    }
+    
     private data class TileKey(val x: Int, val y: Int, val lod: Int)
     private data class DisplayedTile(val imageView: ImageView, val lod: Int)
     

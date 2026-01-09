@@ -276,6 +276,10 @@ class BiomeToolView : View("Biome Tool") {
                     .getBiome(worldX, 0, worldZ, mapView.seed)
                     .id
             }
+            
+            setOnClosed {
+                mapView.close()
+            }
         }
     }
     

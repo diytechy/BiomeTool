@@ -164,6 +164,11 @@ class MapView(
         }
     }
 
+    fun close() {
+        scene?.removeEventFilter(KeyEvent.KEY_PRESSED, escapeHandler)
+        map.cancelAllJobs()
+    }
+
     private fun calculateLod(): Int = (-floor(zoomLevel)).toInt().coerceAtLeast(0)
 
     private fun copyToClipboard(text: String) {
