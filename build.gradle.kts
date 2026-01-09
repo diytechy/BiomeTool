@@ -287,6 +287,26 @@ val prepareRunAddons by tasks.creating(Sync::class) {
     into("$runDir/addons")
 }
 
+val prepareDistAddons by tasks.creating(Sync::class) {
+    group = "distribution"
+    description = "Copies Terra addons to build/libs for standalone JAR usage"
+
+    val terraAddonJars = terraAddon.resolvedConfiguration.firstLevelModuleDependencies.flatMap { dependency ->
+        dependency.moduleArtifacts.map { it.file }
+    }
+    val terraBoostrapJars = bootstrapTerraAddon.resolvedConfiguration.firstLevelModuleDependencies.flatMap { dependency ->
+        dependency.moduleArtifacts.map { it.file }
+    }
+
+    from(terraAddonJars)
+
+    from(terraBoostrapJars) {
+        into("bootstrap")
+    }
+
+    into("$buildDir/libs/addons")
+}
+
 tasks.getByName<JavaExec>("run") {
     dependsOn(prepareRunAddons, downloadDefaultPacks)
     runDir.mkdirs()
@@ -299,4 +319,5 @@ tasks.getByName<JavaExec>("run") {
 tasks.build {
     dependsOn(javadocJar, sourcesJar)
     dependsOn(project.tasks.withType<ShadowJar>())
+    finalizedBy(prepareDistAddons)
 }
