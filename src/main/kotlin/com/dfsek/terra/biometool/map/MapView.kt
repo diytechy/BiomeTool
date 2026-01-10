@@ -33,7 +33,8 @@ class MapView(
     var y = 0.0
         private set
 
-    private var zoomLevel = 0.0
+    var zoomLevel = 0.0
+        private set
 
     val zoom: Double
         get() = 2.0.pow(zoomLevel)
@@ -162,6 +163,13 @@ class MapView(
             oldScene?.removeEventFilter(KeyEvent.KEY_PRESSED, escapeHandler)
             newScene?.addEventFilter(KeyEvent.KEY_PRESSED, escapeHandler)
         }
+    }
+
+    fun setPosition(x: Double, y: Double, zoomLevel: Double) {
+        this.x = x
+        this.y = y
+        this.zoomLevel = zoomLevel.coerceIn(MIN_ZOOM_LEVEL, MAX_ZOOM_LEVEL)
+        updateMapTransform()
     }
 
     fun close() {

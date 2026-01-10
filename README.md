@@ -7,7 +7,7 @@
 - Cancellation rendering queue of invisible tiles and on world close (bug fix)
 - Auto-redraw on window resize (bug fix)
 - Ruler (via context menu)
-- Fixed "Reload Packs" button
+- Fixed "Reload Packs" button + added cool UI
 
 # Biome Tool
 

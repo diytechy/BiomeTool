@@ -1,12 +1,16 @@
 package com.dfsek.terra.biometool.console
 
-import java.io.OutputStream
+import javafx.application.Platform
 import javafx.scene.control.TextArea
+import java.io.OutputStream
+import java.util.concurrent.atomic.AtomicBoolean
 
 class TextAreaOutputStream(
     private val textArea: TextArea
                           ) : OutputStream() {
-    private val buffer: StringBuilder = StringBuilder()
+    
+    private val buffer = StringBuilder()
+    private val scheduled = AtomicBoolean(false)
     
     override fun write(byte: Int) {
         writeToBuffer(byte.toChar().toString())
@@ -17,19 +21,31 @@ class TextAreaOutputStream(
     }
     
     override fun write(bytes: ByteArray, offset: Int, length: Int) {
-        writeToBuffer(bytes.decodeToString(startIndex = offset, endIndex = offset + length))
+        writeToBuffer(bytes.decodeToString(offset, offset + length))
     }
     
     private fun writeToBuffer(string: String) {
-        buffer.append(string)
-        
-        if (string.contains('\n'))
-            writeToTextArea()
+        synchronized(buffer) {
+            buffer.append(string)
+        }
+        scheduleFlush()
     }
     
-    private fun writeToTextArea() {
-        textArea.appendText(buffer.toString())
+    private fun scheduleFlush() {
+        if (!scheduled.compareAndSet(false, true)) return
         
-        buffer.clear()
+        Platform.runLater {
+            val text = synchronized(buffer) {
+                val t = buffer.toString()
+                buffer.clear()
+                t
+            }
+            
+            if (text.isNotEmpty()) {
+                textArea.appendText(text)
+            }
+            
+            scheduled.set(false)
+        }
     }
 }

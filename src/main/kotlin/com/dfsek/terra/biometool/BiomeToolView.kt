@@ -5,6 +5,8 @@ import com.dfsek.terra.api.config.ConfigPack
 import com.dfsek.terra.api.registry.key.RegistryKey
 import com.dfsek.terra.biometool.console.TextAreaOutputStream
 import com.dfsek.terra.biometool.logback.OutputStreamAppender
+import com.dfsek.terra.biometool.logback.ReloadLogAppender
+import com.dfsek.terra.biometool.map.MapView
 import com.dfsek.terra.biometool.util.currentThread
 import com.dfsek.terra.biometool.util.mapview
 import com.dfsek.terra.biometool.util.processors
@@ -13,15 +15,19 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ThreadFactory
 import javafx.application.Platform.exit
+import javafx.application.Platform.runLater
 import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.control.ComboBox
 import javafx.scene.control.Label
+import javafx.scene.control.ProgressIndicator
 import javafx.scene.control.Tab
 import javafx.scene.control.TabPane
 import javafx.scene.control.TabPane.TabClosingPolicy
 import javafx.scene.control.TextArea
 import javafx.scene.control.TextField
+import javafx.scene.layout.StackPane
+import javafx.scene.layout.VBox
 import javafx.scene.text.Font
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -46,12 +52,14 @@ import tornadofx.menubar
 import tornadofx.select
 import tornadofx.selectedItem
 import tornadofx.singleAssign
+import tornadofx.stackpane
 import tornadofx.tab
 import tornadofx.tabpane
 import tornadofx.textarea
 import tornadofx.textfield
 import tornadofx.toObservable
 import tornadofx.vbox
+import kotlin.concurrent.thread
 import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlin.system.exitProcess
@@ -70,13 +78,17 @@ class BiomeToolView : View("Biome Tool") {
     
     private var renderTabs by singleAssign<TabPane>()
     
-    private val consoleTextArea: TextArea = textarea {
-        OutputStreamAppender.outputStream = TextAreaOutputStream(this)
-    }
+    private var consoleTextArea by singleAssign<TextArea>()
     
-    private val biomeID = Label()
+    private var biomeID by singleAssign<Label>()
     
-    private val coordsLabel = Label("0, 0")
+    private var coordsLabel by singleAssign<Label>()
+    
+    private val tabStates = mutableMapOf<Tab, TabState>()
+    
+    private var loadingOverlay by singleAssign<StackPane>()
+    
+    private var loadingLogView by singleAssign<LoadingLogView>()
     
     init {
         logger.info { "Initializing Terra platform..." }
@@ -85,169 +97,239 @@ class BiomeToolView : View("Biome Tool") {
         logger.info { "Terra platform initialized successfully" }
     }
     
-    override val root = vbox {
+    override val root = stackpane {
         importStylesheet("/javafx-darktheme.css")
         
-        minHeight = 720.0
-        minWidth = 1280.0
-        
-        menubar {
-            menu("File") {
-                item("Reload") {
-                    action(::reload)
-                }
-                item("Quit") {
-                    action(::exitApplication)
-                }
-            }
-            menu("View") {
-                menu("Tool Windows") {
-                    item("World Preview") {
-                        action {
-                            toolWindows.worldPreview.select()
-                        }
+        vbox {
+            minHeight = 720.0
+            minWidth = 1280.0
+            
+            menubar {
+                menu("File") {
+                    item("Reload") {
+                        action(::reload)
                     }
-                    item("Console") {
-                        action {
-                            toolWindows.console.select()
-                        }
-                    }
-                    item("Performance") {
-                        action {
-                            toolWindows.console.select()
-                        }
+                    item("Quit") {
+                        action(::exitApplication)
                     }
                 }
-                menu("Appearance") {
-                    isDisable = true
-                    item("Change Theme") {
+                menu("View") {
+                    menu("Tool Windows") {
+                        item("World Preview") {
+                            action {
+                                toolWindows.worldPreview.select()
+                            }
+                        }
+                        item("Console") {
+                            action {
+                                toolWindows.console.select()
+                            }
+                        }
+                        item("Performance") {
+                            action {
+                                toolWindows.console.select()
+                            }
+                        }
+                    }
+                    menu("Appearance") {
+                        isDisable = true
+                        item("Change Theme") {
+                            isDisable = true
+                        }
+                    }
+                    menu("Overlay") {
+                        isDisable = true
+                        item("Chunk Borders") {
+                            isDisable = true
+                        }
+                    }
+                }
+                menu("Tools") {
+                    item("Reload Packs") {
+                        action(::reload)
+                    }
+                }
+                menu("Help") {
+                    item("About") {
+                        isDisable = true
+                    }
+                    item("License") {
                         isDisable = true
                     }
                 }
-                menu("Overlay") {
-                    isDisable = true
-                    item("Chunk Borders") {
-                        isDisable = true
+            }
+            
+            tabpane {
+                tabClosingPolicy = TabClosingPolicy.UNAVAILABLE
+                fitToParentSize()
+                
+                val worldPreview = tab("World Preview") {
+                    vbox {
+                        val top = hbox(6) {
+                            alignment = Pos.CENTER_LEFT
+                            padding = Insets(4.0, 8.0, 4.0, 8.0)
+                            
+                            label("Pack")
+                            
+                            packSelection = combobox {
+                                val configs = platform.configRegistry.keys().toList()
+                                
+                                items = configs.toObservable()
+                                selectionModel.selectFirst()
+                            }
+                            
+                            button("Rerender") {
+                                action {
+                                    addBiomeViewTab()
+                                }
+                            }
+                            
+                            button("Reload Packs") {
+                                action(::reload)
+                            }
+                            
+                            label("Seed") {
+                                padding = Insets(0.0, 0.0, 0.0, 16.0)
+                            }
+                            
+                            seed = textfield {
+                                text = "0"
+                                filterInput { it.controlNewText.isLong() }
+                            }
+                            
+                            button("Random Seed") {
+                                action {
+                                    seed.text = random.nextLong().toString()
+                                    
+                                    addBiomeViewTab(seedLong = random.nextLong())
+                                }
+                            }
+                            
+                            label("Coordinates:") {
+                                padding = Insets(0.0, 0.0, 0.0, 16.0)
+                            }
+                            
+                            coordsLabel = label("0, 0")
+                            
+                            label("Biome:") {
+                                padding = Insets(0.0, 0.0, 0.0, 16.0)
+                            }
+                            
+                            biomeID = label("")
+                        }
+                        
+                        renderTabs = tabpane {
+                            tabClosingPolicy = TabClosingPolicy.ALL_TABS
+                            fitToParentSize()
+                        }
+                        
+                        if (packSelection.selectedItem != null) {
+                            addBiomeViewTab(selectedPack = packSelection.selectedItem!!, seedLong = random.nextLong())
+                        }
                     }
                 }
-            }
-            menu("Tools") {
-                item("Reload Packs") {
-                    action(::reload)
+                val performance = tab("Performance") {
+                    textarea {
+                        font = Font(30.0)
+                        text = """
+                            TODO
+                            
+                            Will be finished later.
+                        """.trimIndent()
+                    }
+                    fitToParentSize()
+                    
                 }
-            }
-            menu("Help") {
-                item("About") {
-                    isDisable = true
+                val console = tab("Console") {
+                    vbox {
+                        styleClass += "console"
+                        consoleTextArea = textarea {
+                            OutputStreamAppender.outputStream = TextAreaOutputStream(this)
+                        }
+                        consoleTextArea.fitToParentSize()
+                        
+                        fitToParentSize()
+                    }
+                    fitToParentSize()
                 }
-                item("License") {
-                    isDisable = true
-                }
+                
+                toolWindows = ToolWindows(worldPreview, performance, console)
             }
         }
         
-        tabpane {
-            tabClosingPolicy = TabClosingPolicy.UNAVAILABLE
-            fitToParentSize()
+        loadingOverlay = stackpane {
+            style = "-fx-background-color: rgba(0, 0, 0, 0.7);"
+            isVisible = false
             
-            val worldPreview = tab("World Preview") {
-                vbox {
-                    val top = hbox(6) {
-                        alignment = Pos.CENTER_LEFT
-                        padding = Insets(4.0, 8.0, 4.0, 8.0)
-                        
-                        label("Pack")
-                        
-                        packSelection = combobox {
-                            val configs = platform.configRegistry.keys().toList()
-                            
-                            items = configs.toObservable()
-                            selectionModel.selectFirst()
-                        }
-                        
-                        button("Rerender") {
-                            action {
-                                addBiomeViewTab()
-                            }
-                        }
-                        
-                        button("Reload Packs") {
-                            action(::reload)
-                        }
-                        
-                        label("Seed") {
-                            padding = Insets(0.0, 0.0, 0.0, 16.0)
-                        }
-                        
-                        seed = textfield {
-                            text = "0"
-                            filterInput { it.controlNewText.isLong() }
-                        }
-                        
-                        button("Random Seed") {
-                            action {
-                                seed.text = random.nextLong().toString()
-                                
-                                addBiomeViewTab(seedLong = random.nextLong())
-                            }
-                        }
-                        
-                        label("Coordinates:") {
-                            padding = Insets(0.0, 0.0, 0.0, 16.0)
-                        }
-                        
-                        add(coordsLabel)
-                        
-                        label("Biome:") {
-                            padding = Insets(0.0, 0.0, 0.0, 16.0)
-                        }
-                        
-                        add(biomeID)
-                    }
-                    
-                    renderTabs = tabpane {
-                        tabClosingPolicy = TabClosingPolicy.ALL_TABS
-                        fitToParentSize()
-                    }
-                    
-                    if (packSelection.selectedItem != null) {
-                        addBiomeViewTab(selectedPack = packSelection.selectedItem!!, seedLong = random.nextLong())
-                    }
-                }
-            }
-            val performance = tab("Performance") {
-                textarea {
-                    font = Font(30.0)
-                    text = """
-                        TODO
-                        
-                        Will be finished later.
-                    """.trimIndent()
-                }
-                fitToParentSize()
+            vbox(10.0) {
+                alignment = Pos.CENTER
+                padding = Insets(0.0, 0.0, 50.0, 0.0)
                 
-            }
-            val console = tab("Console") {
-                vbox {
-                    styleClass += "console"
-                    add(consoleTextArea)
-                    consoleTextArea.fitToParentSize()
-                    
-                    fitToParentSize()
+                add(ProgressIndicator().apply {
+                    maxWidth = 50.0
+                    maxHeight = 50.0
+                })
+                label("Reloading packs...") {
+                    style = "-fx-text-fill: white; -fx-font-size: 14px;"
                 }
-                fitToParentSize()
+                loadingLogView = LoadingLogView().apply {
+                    padding = Insets(20.0, 0.0, 0.0, 0.0)
+                }
+                add(loadingLogView)
             }
-            
-            toolWindows = ToolWindows(worldPreview, performance, console)
         }
     }
     
     private fun reload() {
-        platform.reload()
+        val selectedTabIndex = renderTabs.selectionModel.selectedIndex
         
-        val configs = platform.configRegistry.keys().toList()
+        val savedStates = tabStates.values.map { state ->
+            val mapView = state.mapView
+            state.copy(x = mapView.x, y = mapView.y, zoomLevel = mapView.zoomLevel)
+        }
         
-        packSelection.items = configs.toObservable()
+        tabStates.values.forEach { it.mapView.close() }
+        tabStates.clear()
+        renderTabs.tabs.clear()
+        
+        loadingLogView.clear()
+        loadingOverlay.isVisible = true
+        
+        ReloadLogAppender.listener = { message ->
+            loadingLogView.addLog(message)
+        }
+        
+        thread {
+            platform.reload()
+            
+            runLater {
+                ReloadLogAppender.listener = null
+                
+                val configs = platform.configRegistry.keys().toList()
+                packSelection.items = configs.toObservable()
+                packSelection.selectionModel.selectFirst()
+                
+                for (state in savedStates) {
+                    if (platform.configRegistry.contains(state.packKey)) {
+                        val pack = platform.configRegistry[state.packKey].get()
+                        addBiomeViewTab(
+                            selectedPack = state.packKey,
+                            pack = pack,
+                            seedLong = state.seed,
+                            initialX = state.x,
+                            initialY = state.y,
+                            initialZoom = state.zoomLevel
+                        )
+                    }
+                }
+                
+                if (selectedTabIndex >= 0 && selectedTabIndex < renderTabs.tabs.size) {
+                    renderTabs.selectionModel.select(selectedTabIndex)
+                }
+                
+                loadingOverlay.isVisible = false
+            }
+        }
     }
     
     private fun exitApplication() {
@@ -259,13 +341,22 @@ class BiomeToolView : View("Biome Tool") {
         selectedPack: RegistryKey = packSelection.selectedItem!!,
         pack: ConfigPack = platform.configRegistry[selectedPack].get(),
         seedLong: Long = seed.text.toLong(),
+        initialX: Double = 0.0,
+        initialY: Double = 0.0,
+        initialZoom: Double = 0.0,
                                ): Tab {
         return renderTabs.tab("$selectedPack:$seedLong") {
             select()
             
             val mapView = mapview(BiomeToolView.scope, TerraBiomeImageGenerator(seedLong, pack), 128) {
                 fitToParentSize()
+                if (initialX != 0.0 || initialY != 0.0 || initialZoom != 0.0) {
+                    setPosition(initialX, initialY, initialZoom)
+                }
             }
+            
+            tabStates[this] = TabState(selectedPack, seedLong, mapView, initialX, initialY, initialZoom)
+            
             mapView.setOnMouseMoved {
                 val worldX = (mapView.x + it.x / mapView.zoom).roundToInt()
                 val worldZ = (mapView.y + it.y / mapView.zoom).roundToInt()
@@ -278,7 +369,7 @@ class BiomeToolView : View("Biome Tool") {
             }
             
             setOnClosed {
-                mapView.close()
+                tabStates.remove(this)?.mapView?.close()
             }
         }
     }
@@ -316,5 +407,14 @@ class BiomeToolView : View("Biome Tool") {
         val performance: Tab,
         val console: Tab,
                                    )
+    
+    private data class TabState(
+        val packKey: RegistryKey,
+        val seed: Long,
+        val mapView: MapView,
+        val x: Double = 0.0,
+        val y: Double = 0.0,
+        val zoomLevel: Double = 0.0,
+                                )
     
 }
