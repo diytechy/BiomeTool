@@ -43,6 +43,14 @@ class MapView(
 
     val configPack = tileGenerator.configPack
 
+    fun setMetricsListener(listener: ((Double) -> Unit)?) {
+        map.setMetricsListener(listener)
+    }
+
+    fun resetMetrics() {
+        map.resetMetrics()
+    }
+
     private var contextMenuWorldX = 0
     private var contextMenuWorldZ = 0
 

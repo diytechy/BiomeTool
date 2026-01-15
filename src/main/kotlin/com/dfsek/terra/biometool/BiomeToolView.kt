@@ -64,6 +64,11 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlin.system.exitProcess
 
+enum class SurfaceMode(val displayName: String) {
+    SURFACE("Surface"),
+    SUBSURFACE("Subsurface"),
+    DEFAULT("Legacy")
+}
 
 class BiomeToolView : View("Biome Tool") {
     private val logger by getLogger()
@@ -75,15 +80,19 @@ class BiomeToolView : View("Biome Tool") {
     private var seed by singleAssign<TextField>()
     
     private var packSelection by singleAssign<ComboBox<RegistryKey>>()
-    
+
+    private var surfaceModeSelection by singleAssign<ComboBox<SurfaceMode>>()
+
     private var renderTabs by singleAssign<TabPane>()
     
     private var consoleTextArea by singleAssign<TextArea>()
     
     private var biomeID by singleAssign<Label>()
-    
+
     private var coordsLabel by singleAssign<Label>()
-    
+
+    private var renderRateLabel by singleAssign<Label>()
+
     private val tabStates = mutableMapOf<Tab, TabState>()
     
     private var loadingOverlay by singleAssign<StackPane>()
@@ -173,11 +182,20 @@ class BiomeToolView : View("Biome Tool") {
                             
                             packSelection = combobox {
                                 val configs = platform.configRegistry.keys().toList()
-                                
+
                                 items = configs.toObservable()
                                 selectionModel.selectFirst()
                             }
-                            
+
+                            label("View") {
+                                padding = Insets(0.0, 0.0, 0.0, 8.0)
+                            }
+
+                            surfaceModeSelection = combobox {
+                                items = SurfaceMode.values().toList().toObservable()
+                                selectionModel.selectFirst()
+                            }
+
                             button("Rerender") {
                                 action {
                                     addBiomeViewTab()
@@ -214,8 +232,14 @@ class BiomeToolView : View("Biome Tool") {
                             label("Biome:") {
                                 padding = Insets(0.0, 0.0, 0.0, 16.0)
                             }
-                            
+
                             biomeID = label("")
+
+                            label("Render:") {
+                                padding = Insets(0.0, 0.0, 0.0, 16.0)
+                            }
+
+                            renderRateLabel = label("0.0 tiles/s")
                         }
                         
                         renderTabs = tabpane {
@@ -318,7 +342,8 @@ class BiomeToolView : View("Biome Tool") {
                             seedLong = state.seed,
                             initialX = state.x,
                             initialY = state.y,
-                            initialZoom = state.zoomLevel
+                            initialZoom = state.zoomLevel,
+                            surfaceMode = state.surfaceMode
                         )
                     }
                 }
@@ -337,6 +362,8 @@ class BiomeToolView : View("Biome Tool") {
         exitProcess(0)
     }
     
+    private fun getSelectedSurfaceMode(): SurfaceMode = surfaceModeSelection.selectedItem ?: SurfaceMode.SURFACE
+
     private fun addBiomeViewTab(
         selectedPack: RegistryKey = packSelection.selectedItem!!,
         pack: ConfigPack = platform.configRegistry[selectedPack].get(),
@@ -344,30 +371,40 @@ class BiomeToolView : View("Biome Tool") {
         initialX: Double = 0.0,
         initialY: Double = 0.0,
         initialZoom: Double = 0.0,
+        surfaceMode: SurfaceMode? = null,
                                ): Tab {
-        return renderTabs.tab("$selectedPack:$seedLong") {
+        val effectiveSurfaceMode = surfaceMode ?: getSelectedSurfaceMode()
+        val modeLabel = effectiveSurfaceMode.displayName
+        return renderTabs.tab("$selectedPack:$seedLong:$modeLabel") {
             select()
             
-            val mapView = mapview(BiomeToolView.scope, TerraBiomeImageGenerator(seedLong, pack), 128) {
+            val mapView = mapview(BiomeToolView.scope, TerraBiomeImageGenerator(seedLong, pack, effectiveSurfaceMode), 128) {
                 fitToParentSize()
                 if (initialX != 0.0 || initialY != 0.0 || initialZoom != 0.0) {
                     setPosition(initialX, initialY, initialZoom)
                 }
             }
-            
-            tabStates[this] = TabState(selectedPack, seedLong, mapView, initialX, initialY, initialZoom)
-            
+
+            tabStates[this] = TabState(selectedPack, seedLong, mapView, initialX, initialY, initialZoom, effectiveSurfaceMode)
+
+            // Set up metrics listener for this mapView
+            mapView.setMetricsListener { tilesPerSecond ->
+                runLater {
+                    renderRateLabel.text = "%.1f tiles/s".format(tilesPerSecond)
+                }
+            }
+
+            // Reset metrics when this tab is created (new render)
+            mapView.resetMetrics()
+
             mapView.setOnMouseMoved {
                 val worldX = (mapView.x + it.x / mapView.zoom).roundToInt()
                 val worldZ = (mapView.y + it.y / mapView.zoom).roundToInt()
-                
+
                 coordsLabel.text = "$worldX, $worldZ"
-                biomeID.text = mapView.configPack
-                    .biomeProvider
-                    .getBiome(worldX, 0, worldZ, mapView.seed)
-                    .id
+                biomeID.text = getBiomeIdForMode(mapView, worldX, worldZ, effectiveSurfaceMode)
             }
-            
+
             setOnClosed {
                 tabStates.remove(this)?.mapView?.close()
             }
@@ -415,6 +452,44 @@ class BiomeToolView : View("Biome Tool") {
         val x: Double = 0.0,
         val y: Double = 0.0,
         val zoomLevel: Double = 0.0,
+        val surfaceMode: SurfaceMode = SurfaceMode.SURFACE,
                                 )
-    
+
+    private fun getBiomeIdForMode(mapView: MapView, worldX: Int, worldZ: Int, mode: SurfaceMode): String {
+        val provider = mapView.configPack.biomeProvider
+        val seed = mapView.seed
+        return when (mode) {
+            SurfaceMode.DEFAULT -> provider.getBiome(worldX, 0, worldZ, seed).id
+            SurfaceMode.SURFACE -> {
+                val surfaceProvider = getSurfaceProvider(provider)
+                surfaceProvider.getBiome(worldX, 300, worldZ, seed).id
+            }
+            SurfaceMode.SUBSURFACE -> {
+                val surfaceBiome = provider.getBiome(worldX, 300, worldZ, seed)
+                val yLevels = listOf(270, 240, 210, 180, 150, 120, 90, 60, 30, 0, -30, -60)
+                for (y in yLevels) {
+                    val biome = provider.getBiome(worldX, y, worldZ, seed)
+                    if (biome.id != surfaceBiome.id) {
+                        return biome.id
+                    }
+                }
+                surfaceBiome.id
+            }
+        }
+    }
+
+    private fun getSurfaceProvider(provider: com.dfsek.terra.api.world.biome.generation.BiomeProvider): com.dfsek.terra.api.world.biome.generation.BiomeProvider {
+        return try {
+            val providerClass = provider::class.java
+            if (providerClass.simpleName == "BiomeExtrusionProvider") {
+                val getDelegateMethod = providerClass.getMethod("getDelegate")
+                getDelegateMethod.invoke(provider) as com.dfsek.terra.api.world.biome.generation.BiomeProvider
+            } else {
+                provider
+            }
+        } catch (e: Exception) {
+            provider
+        }
+    }
+
 }
