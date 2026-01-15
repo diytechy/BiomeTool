@@ -1,38 +1,10 @@
 Note: This prompt relates to the same Terra project that was discussed previously in C:\Projects\terra-origen.
 
-Goal: Fix or build a new tool to visualize pack files for the Minecraft Terra plugin.
-C:\JAVA\jdk-23\bin\java -jar BiomeTool-0.4.9-all.jar
-Currently trying to use the official tool, "BiomeTool" (https://github.com/PolyhedralDev/BiomeTool) but it is resulting in errors. 
+Goal: Add functionality into this project that was previously added (for reference at C\Projects\BiomeToolOld)
 
-##Option 1: Help to debug the command "C:\JAVA\jdk-23\bin\java -jar BiomeTool-0.4.9-win.jar" run out of "C:\Projects\BiomeTool\build\libs" resulting in the error 'Message: No such com.dfsek.terra.api.addon.BaseAddon matching "biome-provider-pipeline" was found in this registry.' and fix dependencies in the build process.
+The functionality in C\Projects\BiomeToolOld was added with the following prompt:
 
-This is occuring when the jar executable is attempting to load C:\Projects\BiomeTool\build\libs\v\packs\Overworld as it automatically attempts to read all packs in the "\packs" folder in it's root directory on startup.
-
-The BiomeTool can be recompiled via "C:\Projects\BiomeTool\Gradlew.bat".
-
-Note the pipeline handler is pulled in through the build.gradle.kts build definition file, and here it lists multiple modules to pull in based on their hash version (terraGitHash = "af9fb211a").  If I attempt to change that to a newer available hash (like fd6decc70) There are newer modules available (specifically biome-provider-pipeline 2.0.0) but other dependencies then fail.  It appears the sister project which uses the same modules (C:\Projects\Terra) has an updated gradle process which builds the modules locally instead of trying to pull them from maven.
-
-Based on what I see there are two paths forward to fix the build:
-
-A. Just copy over build dependenciesthat were already built as a part of C:\Projects\Terra to an appropriate location , and change the gradle scripts to load those local resources instead of trying to get the package from a web repository.
-
-B. Update the build process so that C:\Projects\BiomeTool constructs it's dependencies the same way C:\Projects\Terra.
-
-IMPORTANT: It appears the key dependencies which are not getting met are by author dfsek.
-
-##Option 2: A likely much more difficult path would be to try and reimpliment the funcitonality of C:\Projects\BiomeTool in the form of a python package, which would read the pack file, parse the biome distribution, expressions, and colors, and attempt to render that biome distribution in a similar fashion to what the C:\Projects\BiomeTool\build\libs\BiomeTool-0.4.9-win.jar is attempting to do.
-
-## Post fix:
-
-The map does work, but there is a nuascance error that appears in the console as well as in "C:\Projects\Terra":
-
-ERROR com.dfsek.seismic.util.ReflectionUtils           - Field theUnsafe not found in class sun.misc.Unsafe
-
-Can you resolve this error both in "C:\Projects\Terra" and in "C:\Projects\BiomeTool"?
-
-Next:
-
-I want to add functionality to this tool so that the user can have a UI toggle to switch between surface and subsurface presentation.  Currently, all subsurface features are layered on top of surface level content, which makes it challenging to review the map.
+I want to add functionality to this tool so that the user can have a UI toggle to switch between surface, subsurface, and default presentation.  Currently, the default view renders with a y height of 0, which is quite low to the overall world map (-64<y<320)
 
 When this tool opens it currently shows 3 tabs at the top: "World Preview", "Performance", and "Console".
 
@@ -42,84 +14,8 @@ Between "Pack" and "Rerender" I want to add another two-way switch with the opti
 
 If "Surface" is selected, I want the BiomeTool to ignore the main extrusion definition from the preset configuration that the tool pulls loads from each pack folder
 
-ex: the following text that comes from preset C:\Projects\BiomeTool\build\libs\packs\terra-origen\biome-distribution\presets\origen2.yml and pack ORIGEN2:
+Refer to BiomeToolOld to see how this was done if more reference is needed, but the functions were simply updated so that "subsurface" checked biomes in steps, and if it changed fromm the surface level biome (height 300), it would be considered subsurface.
 
-biomes:
-  type: EXTRUSION
-  extrusions:
-  
-In this way, the extrusions which create caves and other biomes underground would not appear on the map.
+Additional functionality NOT included in C\Projects\BiomeToolOld:
 
-Similarly, if "Subsurface" is selected, I want the BiomeTool to ignore all of the normal stages listed in the preset.
-
-Ex: The stages that comes from preset C:\Projects\BiomeTool\build\libs\packs\terra-origen\biome-distribution\presets\origen2.yml and pack ORIGEN2 should be ignored:
-
-        #Add spots to drop large POIs like volcanos / mesas
-        #Input: ocean / land
-        #Output: ocean / land / various spot locations (mesa / volcano) / coastal regions.
-        - << biome-distribution/stages/add_spots.yml:stages
-        
-        #Break apart land into major transitionals
-        #Input: ocean / land
-        #Output: land / vast-forest / island / ocean.
-        - << biome-distribution/stages/add_large_spots.yml:stages
-        
-        
-        #Add coast-lines between land / ocean.  Might need to return and add transition from forest?
-        #Input: ocean / land
-        #Output: ocean / land / coast
-        - << biome-distribution/stages/add_coast.yml:stages
-        
-        
-        #Split land into canyon (effectively a basin) / land distribution.
-        #Input: land
-        #Output: land, ICY_INCISIONS, SANDY_SPLITS (temperature based)
-        - << biome-distribution/stages/special/canyons.yml:stages
-        
-        #Future placeholder to add sinkholes
-        #Input: land
-        #Output: sink hole zones
-        
-        #Using temperature / precipitation / elevation, generate biome distribution.
-        - << biome-distribution/stages/climate/temperature.yml:stages
-        - << biome-distribution/stages/climate/precipitation.yml:stages
-        - << biome-distribution/stages/climate/elevation.yml:stages
-        
-        
-        #Build out coast lines and islands.
-        - << biome-distribution/stages/add_large_spot_coast.yml:stages
-        - << biome-distribution/stages/add_island_shelf.yml:stages
-        - << biome-distribution/stages/add_islands.yml:stages
-        - << biome-distribution/stages/climate/color.yml:stages
-        
-        #Add in terraces
-        - << biome-distribution/stages/add_travertine_terraces.yml:stages
-        
-        #Place remaining biome regions into actual biome definitions
-        - << biome-distribution/stages/set_biomes_in_climates.yml:stages
-        
-        #Add color variants to special biomes.
-        - << biome-distribution/stages/add_biome_color_variants.yml:stages
-        
-        #Integrate special borders.
-        - << biome-distribution/stages/special/border_biomes.yml:stages
-
-        - type: FRACTAL_EXPAND
-          sampler:
-            type: WHITE_NOISE
-        - type: SMOOTH
-          sampler:
-            type: WHITE_NOISE
-
-        - << biome-distribution/stages/add_rivers.yml:stages
-        
-        - type: SMOOTH
-          sampler:
-            type: WHITE_NOISE
-
-
-        - << biome-distribution/stages/add_trenches.yml:stages
-		
-Ideally this should create another render tab below these selections.  Today that tab shows with a title form of "PACK:PRESET:SEED", and I would like that to instead  say "PACK:PRESET:SEED:SURFACE_SELECTION".
-
-This will likely require intercepting the preset definition and modifying to before it is injected into the biome processor, but that is an assumption from my side.
+I also want the tool to report the average rate at which it's rendering cells / image blocks per second.  I want this metric to show either in the upper right hand side to the right of the "Biome" label, but it could also appear on the rendering itself with a text overlay).  The metric should be tracked per world render, should pause when no cells / image blocks are being rendered, and should unpause if the view port is changed resulting in the need for new cell / image blocks to render.  The metric must reset whenever a render is refreshed.
