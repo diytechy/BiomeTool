@@ -10,7 +10,7 @@ When this tool opens it currently shows 3 tabs at the top: "World Preview", "Per
 
 Below this in the "World Preview" option, there is  "Pack" drop down list, and to the right of this there is an option to "Rerender".
 
-Between "Pack" and "Rerender" I want to add another two-way switch with the option "Subsurface" and "Surface".
+Between "Pack" and "Rerender" I want to add another three-way switch with the option "Subsurface" and "Surface".
 
 If "Surface" is selected, I want the BiomeTool to ignore the main extrusion definition from the preset configuration that the tool pulls loads from each pack folder
 
