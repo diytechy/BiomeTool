@@ -33,39 +33,63 @@ class InternalMap(
     private var viewportWidth = 0.0
     private var viewportHeight = 0.0
 
-    // Rendering metrics
-    private val tilesRenderedInWindow = AtomicInteger(0)
-    private val windowStartTime = AtomicLong(System.currentTimeMillis())
-    private var lastTilesPerSecond = 0.0
+    // Rendering metrics - lifetime accumulation
+    private val totalTilesRendered = AtomicInteger(0)
+    private val totalRenderTimeMs = AtomicLong(0)
+    private var renderingStartTime: Long = 0
+    private var isActivelyRendering = false
     private var metricsListener: ((Double) -> Unit)? = null
-    private var isRendering = false
 
     fun setMetricsListener(listener: ((Double) -> Unit)?) {
         metricsListener = listener
     }
 
     fun resetMetrics() {
-        tilesRenderedInWindow.set(0)
-        windowStartTime.set(System.currentTimeMillis())
-        lastTilesPerSecond = 0.0
-        isRendering = false
+        // Stop the timer if running
+        if (isActivelyRendering) {
+            stopRenderTimer()
+        }
+        totalTilesRendered.set(0)
+        totalRenderTimeMs.set(0)
+        isActivelyRendering = false
         metricsListener?.invoke(0.0)
     }
 
+    private fun startRenderTimer() {
+        if (!isActivelyRendering) {
+            isActivelyRendering = true
+            renderingStartTime = System.currentTimeMillis()
+        }
+    }
+
+    private fun stopRenderTimer() {
+        if (isActivelyRendering) {
+            val elapsed = System.currentTimeMillis() - renderingStartTime
+            totalRenderTimeMs.addAndGet(elapsed)
+            isActivelyRendering = false
+            updateMetricsDisplay()
+        }
+    }
+
     private fun recordTileRendered() {
-        val count = tilesRenderedInWindow.incrementAndGet()
-        val elapsed = System.currentTimeMillis() - windowStartTime.get()
+        totalTilesRendered.incrementAndGet()
+        updateMetricsDisplay()
+    }
 
-        if (elapsed > 0) {
-            lastTilesPerSecond = count * 1000.0 / elapsed
-            metricsListener?.invoke(lastTilesPerSecond)
+    private fun updateMetricsDisplay() {
+        // Calculate current total time including any ongoing render session
+        var currentTotalTime = totalRenderTimeMs.get()
+        if (isActivelyRendering) {
+            currentTotalTime += System.currentTimeMillis() - renderingStartTime
         }
 
-        // Reset window every 5 seconds to get more current rate
-        if (elapsed > 5000) {
-            tilesRenderedInWindow.set(1)
-            windowStartTime.set(System.currentTimeMillis())
+        val tiles = totalTilesRendered.get()
+        val tilesPerSecond = if (currentTotalTime > 0) {
+            tiles * 1000.0 / currentTotalTime
+        } else {
+            0.0
         }
+        metricsListener?.invoke(tilesPerSecond)
     }
 
     fun updateViewport(x: Double, y: Double, width: Double, height: Double, lod: Int) {
@@ -129,10 +153,8 @@ class InternalMap(
         val key = TileKey(tileX, tileY, lod)
         if (tileCache.containsKey(key) || pendingJobs.containsKey(key)) return
 
-        // Mark as rendering when we start a job
-        if (!isRendering) {
-            isRendering = true
-        }
+        // Start the render timer when we begin generating tiles
+        startRenderTimer()
 
         val job = scope.launch {
             try {
@@ -160,17 +182,24 @@ class InternalMap(
                         displayedTiles[posKey] = DisplayedTile(imageView, lod)
                     }
 
-                    // Record metric after tile is rendered
+                    // Record that a tile was rendered
                     recordTileRendered()
 
-                    // Check if we're done rendering
+                    // Stop timer when no more pending jobs
                     if (pendingJobs.isEmpty()) {
-                        isRendering = false
+                        stopRenderTimer()
                     }
                 }
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
                     logger.warn(e) { "Exception occurred while generating tile." }
+                }
+                Platform.runLater {
+                    pendingJobs.remove(key)
+                    // Stop timer if no more pending jobs after error
+                    if (pendingJobs.isEmpty()) {
+                        stopRenderTimer()
+                    }
                 }
             }
         }
@@ -185,6 +214,10 @@ class InternalMap(
         toCancel.forEach { (key, job) ->
             job.cancel()
             pendingJobs.remove(key)
+        }
+        // Check if we should stop the timer after cancelling jobs
+        if (pendingJobs.isEmpty() && isActivelyRendering) {
+            stopRenderTimer()
         }
     }
 
@@ -212,6 +245,10 @@ class InternalMap(
     fun cancelAllJobs() {
         pendingJobs.values.forEach { it.cancel() }
         pendingJobs.clear()
+        // Stop timer when all jobs cancelled
+        if (isActivelyRendering) {
+            stopRenderTimer()
+        }
     }
 
     private data class TileKey(val x: Int, val y: Int, val lod: Int)
