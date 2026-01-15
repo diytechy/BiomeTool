@@ -19,12 +19,12 @@ version = "0.4.9"
 val runDir = file("$buildDir/run")
 
 repositories {
-    mavenLocal()  // Use locally published Terra artifacts first
     mavenCentral()
     maven {
         name = "Solo Studios"
         url = uri("https://maven.solo-studios.ca/releases")
     }
+    //mavenLocal()  // Use locally published Terra artifacts first
     maven {
         name = "CodeMC"
         url = uri("https://repo.codemc.org/repository/maven-public/")
