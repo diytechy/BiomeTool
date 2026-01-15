@@ -3,6 +3,7 @@ package com.dfsek.terra.biometool
 import com.dfsek.terra.api.config.ConfigPack
 import com.dfsek.terra.biometool.map.MapTilePoint
 import javafx.scene.image.Image
+import javafx.scene.image.PixelFormat
 import javafx.scene.image.WritableImage
 
 class TerraBiomeImageGenerator(
@@ -16,18 +17,25 @@ class TerraBiomeImageGenerator(
         val sampleStep = 1 shl lod
         val imageSize = tileSize / sampleStep
         
-        val img = WritableImage(imageSize, imageSize)
-        val pixelWriter = img.pixelWriter
-        
         val worldX = tileX * tileSize
         val worldY = tileY * tileSize
         
-        for (xi in 0 until imageSize) {
-            for (yi in 0 until imageSize) {
-                val color = provider.getBiome(worldX + xi * sampleStep, 0, worldY + yi * sampleStep, seed).color
-                pixelWriter.setArgb(xi, yi, color)
+        val pixels = IntArray(imageSize * imageSize)
+        
+        for (yi in 0 until imageSize) {
+            val rowOffset = yi * imageSize
+            for (xi in 0 until imageSize) {
+                pixels[rowOffset + xi] = provider.getBiome(
+                    worldX + xi * sampleStep,
+                    0,
+                    worldY + yi * sampleStep,
+                    seed
+                ).color
             }
         }
+        
+        val img = WritableImage(imageSize, imageSize)
+        img.pixelWriter.setPixels(0, 0, imageSize, imageSize, PixelFormat.getIntArgbInstance(), pixels, 0, imageSize)
         
         return img
     }

@@ -41,7 +41,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            build/libs/BiomeTool-*-all.jar
-            build/libs/BiomeTool-*-linux.jar
-            build/libs/BiomeTool-*-osx.jar
-            build/libs/BiomeTool-*-win.jar
+            build/libs/BiomeToolEnhanced-*-all.jar
+            build/libs/BiomeToolEnhanced-*-linux.jar
+            build/libs/BiomeToolEnhanced-*-osx.jar
+            build/libs/BiomeToolEnhanced-*-win.jar
