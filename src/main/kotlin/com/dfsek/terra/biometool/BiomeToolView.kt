@@ -248,7 +248,7 @@ class BiomeToolView : View("Biome Tool") {
                         }
                         
                         if (packSelection.selectedItem != null) {
-                            addBiomeViewTab(selectedPack = packSelection.selectedItem!!, seedLong = random.nextLong())
+                            addBiomeViewTab(selectedPack = packSelection.selectedItem!!, seedLong = 0L)
                         }
                     }
                 }
