@@ -19,3 +19,16 @@ Refer to BiomeToolOld to see how this was done if more reference is needed, but 
 Additional functionality NOT included in C\Projects\BiomeToolOld:
 
 I also want the tool to report the average rate at which it's rendering cells / image blocks per second.  I want this metric to show either in the upper right hand side to the right of the "Biome" label, but it could also appear on the rendering itself with a text overlay).  The metric should be tracked per world render, should pause when no cells / image blocks are being rendered, and should unpause if the view port is changed resulting in the need for new cell / image blocks to render.  The metric must reset whenever a render is refreshed.
+
+
+The main purpose of this project is to read in pack files and determine how to distribute biomes into a minecraft map.  As an example from "packs/terra_origins/biomes/tropical-rainforest/biome_distribution.yaml":
+      tropical-rainforest:
+        - tropical-rainforest-flat: 1
+        - tropical-rainforest: 1
+        - tropical-rainforest: 1
+        - tropical-rainforest-highlands: 1
+
+Output needs to be normalized?  Or just take advantage of scalable breakdown?
+
++ Should output be scale by elevation or temperature first?
+
