@@ -21,10 +21,13 @@ val runDir = file("$buildDir/run")
 repositories {
     mavenCentral()
     maven {
+        name = "Repsy-Terra"
+        url = uri("https://repo.repsy.io/mvn/diytechy/terra")
+    }
+    maven {
         name = "Solo Studios"
         url = uri("https://maven.solo-studios.ca/releases")
     }
-    //mavenLocal()  // Use locally published Terra artifacts first
     maven {
         name = "CodeMC"
         url = uri("https://repo.codemc.org/repository/maven-public/")
@@ -104,48 +107,48 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
 
-    val terraGitHash = "a159debe3"
+    val terraGitHash = "ec788bf"
 
-    bootstrapTerraAddon("com.dfsek.terra:api-addon-loader:0.1.0-BETA+$terraGitHash")
-    bootstrapTerraAddon("com.dfsek.terra:manifest-addon-loader:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:biome-provider-extrusion:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:biome-provider-image:2.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:biome-provider-pipeline:2.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:biome-provider-single:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:biome-query-api:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:chunk-generator-noise-3d:1.2.1-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:command-addons:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:command-packs:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:command-profiler:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:command-structures:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:config-biome:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:config-distributors:1.0.1-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:config-feature:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:config-flora:1.0.1-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:config-locators:1.1.1-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:config-noise-function:1.2.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:config-number-predicate:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:config-ore:1.1.1-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:config-palette:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:config-structure:1.0.1-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:generation-stage-feature:1.1.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:generation-stage-structure:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:language-yaml:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:library-image:1.1.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:locator-slant-noise-3d:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:palette-block-shortcut:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:pipeline-image:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:structure-block-shortcut:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:structure-mutator:0.1.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:structure-sponge-loader:1.0.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:structure-terrascript-loader:1.2.0-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:terrascript-function-check-noise-3d:1.0.1-BETA+$terraGitHash")
-    terraAddon("com.dfsek.terra:terrascript-function-sampler:1.0.0-BETA+$terraGitHash")
+    bootstrapTerraAddon("com.dfsek.terra:api-addon-loader:0.1.0-BETA-$terraGitHash")
+    bootstrapTerraAddon("com.dfsek.terra:manifest-addon-loader:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:biome-provider-extrusion:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:biome-provider-image:2.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:biome-provider-pipeline:2.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:biome-provider-single:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:biome-query-api:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:chunk-generator-noise-3d:1.2.1-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:command-addons:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:command-packs:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:command-profiler:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:command-structures:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:config-biome:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:config-distributors:1.0.1-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:config-feature:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:config-flora:1.0.1-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:config-locators:1.1.1-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:config-noise-function:1.2.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:config-number-predicate:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:config-ore:1.1.1-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:config-palette:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:config-structure:1.0.1-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:generation-stage-feature:1.1.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:generation-stage-structure:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:language-yaml:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:library-image:1.1.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:locator-slant-noise-3d:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:palette-block-shortcut:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:pipeline-image:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:structure-block-shortcut:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:structure-mutator:0.1.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:structure-sponge-loader:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:structure-terrascript-loader:1.2.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:terrascript-function-check-noise-3d:1.0.1-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:terrascript-function-sampler:1.0.0-BETA-$terraGitHash")
 
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 
-    implementation("com.dfsek.terra:base:7.0.0-BETA+$terraGitHash")
+    implementation("com.dfsek.terra:base:7.0.0-BETA-$terraGitHash")
 
     implementation("ca.solo-studios:slf4k:0.5.4")
 
