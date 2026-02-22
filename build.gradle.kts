@@ -19,6 +19,7 @@ version = "0.5.1"
 val runDir = file("$buildDir/run")
 
 repositories {
+    mavenLocal()  // Check local ~/.m2 first (use publish_to_maven_local.bat in Terra to populate)
     mavenCentral()
     maven {
         name = "Repsy-Terra"
@@ -107,11 +108,24 @@ val bootstrapTerraAddon: Configuration by configurations.creating {
     runtimeClasspath.extendsFrom(this)
 }
 
+gradle.taskGraph.whenReady {
+    val terraModule = configurations.compileClasspath.get().resolvedConfiguration
+        .resolvedArtifacts.find { it.moduleVersion.id.group == "com.dfsek.terra" && it.moduleVersion.id.name == "base" }
+    if(terraModule != null) {
+        val repo = when {
+            terraModule.file.path.replace("\\", "/").contains("/.m2/repository/") -> "mavenLocal"
+            else -> "remote (Repsy or other)"
+        }
+        logger.lifecycle("Terra base resolved: ${terraModule.moduleVersion.id} from $repo")
+        logger.lifecycle("  -> ${terraModule.file}")
+    }
+}
+
 dependencies {
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
 
-    val terraGitHash = "ec788bf"
+    val terraGitHash = "ab245b090"
 
     bootstrapTerraAddon("com.dfsek.terra:api-addon-loader:0.1.0-BETA-$terraGitHash")
     bootstrapTerraAddon("com.dfsek.terra:manifest-addon-loader:1.0.0-BETA-$terraGitHash")
