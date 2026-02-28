@@ -32,3 +32,11 @@ Output needs to be normalized?  Or just take advantage of scalable breakdown?
 
 + Should output be scale by elevation or temperature first?
 
+####################################################3
+
+
+Plan for some updates to the BiomeTool C:\Projects\BiomeTool:
+Each thread should prefer to fill the big-chunk (256x256 world grid, or 16 chunk x 16 chunk square, skipping chunks that are outside the view window) to take better advantage of Dendry noise caching, instead of what appears to be each 16x16 chunk block that are closest to the last viewed region.
+
+Investigate performance issues with BiomeTool:
+When launching the current configuration (via C:\Projects\BiomeTool\CopyPacksAndLaunchLatestBuild.bat) it takes almost a minute to load.
