@@ -30,7 +30,7 @@ for %%F in ("%DEST%\*.*") do (
     )
 )
 
-set "DEST=C:\MC\MINECRAFT_SERVER_TMP_4BACKUP\plugins\Terra\packs\Explore_Test"
+set "DEST=C:\MC\MINECRAFT_SERVER_TMP_4BACKUP\plugins\Terra\packs\CHIMERA"
 echo Destination: %DEST%
 echo.
 
