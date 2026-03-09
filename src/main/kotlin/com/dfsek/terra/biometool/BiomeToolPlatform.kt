@@ -19,6 +19,7 @@ object BiomeToolPlatform : AbstractPlatform() {
     init {
         logger.info { "Root directory: ${dataFolder.absoluteFile}" }
         load()
+        profiler.start()
         logger.info { "Enabled Terra platform." }
     }
     
