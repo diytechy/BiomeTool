@@ -23,8 +23,10 @@ for %%F in ("%DEST%\*.*") do (
     if /i not "!filename!"=="pack.yml" (
         if /i not "!filename!"=="meta.yml" (
             if /i not "!filename!"=="customization.yml" (
-                echo Deleting: !filename!
-                del "%%F"
+				if /i not "!filename!"=="substratum_meta.yml" (
+					echo Deleting: !filename!
+					del "%%F"
+				)
             )
         )
     )
@@ -47,8 +49,10 @@ for %%F in ("%DEST%\*.*") do (
     if /i not "!filename!"=="pack.yml" (
         if /i not "!filename!"=="meta.yml" (
             if /i not "!filename!"=="customization.yml" (
-                echo Deleting: !filename!
-                del "%%F"
+				if /i not "!filename!"=="substratum_meta.yml" (
+					echo Deleting: !filename!
+					del "%%F"
+				)
             )
         )
     )
