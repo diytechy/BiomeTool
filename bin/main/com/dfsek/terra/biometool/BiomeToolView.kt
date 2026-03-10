@@ -14,6 +14,9 @@ import com.dfsek.terra.biometool.util.runtime
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ThreadFactory
+import javafx.animation.Animation
+import javafx.animation.KeyFrame
+import javafx.animation.Timeline
 import javafx.application.Platform.exit
 import javafx.application.Platform.runLater
 import javafx.geometry.Insets
@@ -29,6 +32,7 @@ import javafx.scene.control.TextField
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import javafx.scene.text.Font
+import javafx.util.Duration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.SupervisorJob
@@ -86,6 +90,8 @@ class BiomeToolView : View("Biome Tool") {
     private var renderTabs by singleAssign<TabPane>()
     
     private var consoleTextArea by singleAssign<TextArea>()
+
+    private var performanceTextArea by singleAssign<TextArea>()
     
     private var biomeID by singleAssign<Label>()
 
@@ -136,7 +142,7 @@ class BiomeToolView : View("Biome Tool") {
                         }
                         item("Performance") {
                             action {
-                                toolWindows.console.select()
+                                toolWindows.performance.select()
                             }
                         }
                     }
@@ -211,7 +217,7 @@ class BiomeToolView : View("Biome Tool") {
                             }
                             
                             seed = textfield {
-                                text = "0"
+                                text = "1"
                                 filterInput { it.controlNewText.isLong() }
                             }
                             
@@ -248,21 +254,21 @@ class BiomeToolView : View("Biome Tool") {
                         }
                         
                         if (packSelection.selectedItem != null) {
-                            addBiomeViewTab(selectedPack = packSelection.selectedItem!!, seedLong = 0L)
+                            addBiomeViewTab(selectedPack = packSelection.selectedItem!!, seedLong = 1L)
                         }
                     }
                 }
                 val performance = tab("Performance") {
-                    textarea {
-                        font = Font(30.0)
-                        text = """
-                            TODO
-                            
-                            Will be finished later.
-                        """.trimIndent()
+                    vbox {
+                        performanceTextArea = textarea {
+                            isEditable = false
+                            font = Font.font("Monospaced", 13.0)
+                            text = "Waiting for profiler data..."
+                        }
+                        performanceTextArea.fitToParentSize()
+                        fitToParentSize()
                     }
                     fitToParentSize()
-                    
                 }
                 val console = tab("Console") {
                     vbox {
@@ -304,6 +310,88 @@ class BiomeToolView : View("Biome Tool") {
         }
     }
     
+    private fun flattenTimings(
+        prefix: String,
+        timings: com.dfsek.terra.api.profiler.Timings,
+        parentSum: Double,
+        rows: MutableList<Array<String>>,
+        depth: Int = 0
+    ) {
+        val percent = if (parentSum > 0) (timings.sum() / parentSum) * 100 else 0.0
+        val indent = "  ".repeat(depth)
+        rows.add(arrayOf(
+            "$indent$prefix",
+            "%6.2f%%".format(percent),
+            "%.2f ms".format(timings.min().toDouble() / 1_000_000),
+            "%.2f ms".format(timings.average() / 1_000_000),
+            "%.2f ms".format(timings.max().toDouble() / 1_000_000),
+            "%.2f ms".format(timings.sum() / 1_000_000),
+            "%d".format(timings.timings.size)
+        ))
+        val subItems = timings.subItems
+        for ((id, sub) in subItems) {
+            flattenTimings(id, sub, timings.sum(), rows, depth + 1)
+        }
+    }
+
+    private fun buildProfilerTable(timingsMap: Map<String, com.dfsek.terra.api.profiler.Timings>): String {
+        val headers = arrayOf("Stage", "  %   ", "Min", "Avg", "Max", "Total", "Samples")
+        val rows = mutableListOf<Array<String>>()
+        for ((id, timing) in timingsMap) {
+            flattenTimings(id, timing, timing.sum(), rows, 0)
+        }
+        if (rows.isEmpty()) return "No profiler data yet."
+
+        // Calculate column widths
+        val colCount = headers.size
+        val widths = IntArray(colCount) { headers[it].length }
+        for (row in rows) {
+            for (i in 0 until colCount) {
+                widths[i] = maxOf(widths[i], row[i].length)
+            }
+        }
+
+        val sb = StringBuilder()
+        // Header
+        for (i in 0 until colCount) {
+            if (i > 0) sb.append("  ")
+            sb.append(headers[i].padEnd(widths[i]))
+        }
+        sb.append("\n")
+        // Separator
+        for (i in 0 until colCount) {
+            if (i > 0) sb.append("  ")
+            sb.append("-".repeat(widths[i]))
+        }
+        sb.append("\n")
+        // Rows
+        for (row in rows) {
+            for (i in 0 until colCount) {
+                if (i > 0) sb.append("  ")
+                if (i == 0) sb.append(row[i].padEnd(widths[i]))
+                else sb.append(row[i].padStart(widths[i]))
+            }
+            sb.append("\n")
+        }
+        return sb.toString()
+    }
+
+    private val profilerUpdateTimeline = Timeline(KeyFrame(Duration.millis(500.0), {
+        try {
+            val timings = BiomeToolPlatform.profiler.timings
+            if (timings.isNotEmpty()) {
+                val scrollTop = performanceTextArea.scrollTop
+                performanceTextArea.text = buildProfilerTable(timings)
+                performanceTextArea.scrollTop = scrollTop
+            }
+        } catch (_: ConcurrentModificationException) {
+            // Skip this cycle
+        }
+    })).apply {
+        cycleCount = Animation.INDEFINITE
+        play()
+    }
+
     private fun reload() {
         val selectedTabIndex = renderTabs.selectionModel.selectedIndex
         
@@ -324,6 +412,7 @@ class BiomeToolView : View("Biome Tool") {
         }
         
         thread {
+            platform.profiler.reset()
             platform.reload()
             
             runLater {
@@ -432,7 +521,7 @@ class BiomeToolView : View("Biome Tool") {
     companion object {
         private val random = Random(Random.nextLong())
         private val scheduledThreadPool: ScheduledExecutorService =
-            Executors.newScheduledThreadPool((runtime.processors).coerceAtLeast(1), BiomeToolThreadFactory)
+            Executors.newScheduledThreadPool((runtime.processors).coerceAtLeast(1).coerceAtMost(4), BiomeToolThreadFactory)
         
         private val coroutineDispatcher: ExecutorCoroutineDispatcher = scheduledThreadPool.asCoroutineDispatcher()
         

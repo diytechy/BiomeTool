@@ -217,7 +217,7 @@ class BiomeToolView : View("Biome Tool") {
                             }
                             
                             seed = textfield {
-                                text = "0"
+                                text = "1"
                                 filterInput { it.controlNewText.isLong() }
                             }
                             
@@ -254,7 +254,7 @@ class BiomeToolView : View("Biome Tool") {
                         }
                         
                         if (packSelection.selectedItem != null) {
-                            addBiomeViewTab(selectedPack = packSelection.selectedItem!!, seedLong = 0L)
+                            addBiomeViewTab(selectedPack = packSelection.selectedItem!!, seedLong = 1L)
                         }
                     }
                 }
@@ -521,7 +521,7 @@ class BiomeToolView : View("Biome Tool") {
     companion object {
         private val random = Random(Random.nextLong())
         private val scheduledThreadPool: ScheduledExecutorService =
-            Executors.newScheduledThreadPool((runtime.processors).coerceAtLeast(1), BiomeToolThreadFactory)
+            Executors.newScheduledThreadPool((runtime.processors).coerceAtLeast(1).coerceAtMost(4), BiomeToolThreadFactory)
         
         private val coroutineDispatcher: ExecutorCoroutineDispatcher = scheduledThreadPool.asCoroutineDispatcher()
         
