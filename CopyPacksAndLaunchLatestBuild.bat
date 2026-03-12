@@ -38,9 +38,9 @@ echo Destination: %DEST%
 echo.
 
 :: Copy everything recursively, excluding specified folders
-::robocopy "%SOURCE%" "%DEST%" /E ^
-::    /XD ".*" "_*" "OldPromptAndReviewReferences" "Review" ^
-::    /R:3 /W:5 /XO /NDL /NJH /NJS /purge
+robocopy "%SOURCE%" "%DEST%" /E ^
+    /XD ".*" "_*" "OldPromptAndReviewReferences" "Review" ^
+    /R:3 /W:5 /XO /NDL /NJH /NJS /purge
 
 
 echo.
