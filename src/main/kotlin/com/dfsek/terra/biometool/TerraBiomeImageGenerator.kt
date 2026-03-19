@@ -7,6 +7,8 @@ import com.dfsek.terra.biometool.map.MapTilePoint
 import javafx.scene.image.Image
 import javafx.scene.image.PixelFormat
 import javafx.scene.image.WritableImage
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 class TerraBiomeImageGenerator(
     override val seed: Long,
@@ -18,6 +20,31 @@ class TerraBiomeImageGenerator(
         private const val LAND_COLOR = 0xFF228B22.toInt()  // Forest Green
         private const val OCEAN_COLOR = 0xFF000080.toInt() // Navy Blue
         private val Y_LEVELS = listOf(270, 240, 210, 180, 150, 120, 90, 60, 30, 0, -30, -60)
+    }
+
+    private val surfaceBiomeCounts = ConcurrentHashMap<String, AtomicLong>()
+    private val subsurfaceBiomeCounts = ConcurrentHashMap<String, AtomicLong>()
+    private val surfaceTotalPixels = AtomicLong(0)
+    private val subsurfaceTotalPixels = AtomicLong(0)
+
+    var distributionListener: (() -> Unit)? = null
+
+    fun getDistribution(mode: SurfaceMode): List<BiomeDistributionEntry> {
+        val counts = when (mode) {
+            SurfaceMode.SURFACE, SurfaceMode.DEFAULT -> surfaceBiomeCounts
+            SurfaceMode.SUBSURFACE -> subsurfaceBiomeCounts
+        }
+        val total = when (mode) {
+            SurfaceMode.SURFACE, SurfaceMode.DEFAULT -> surfaceTotalPixels.get()
+            SurfaceMode.SUBSURFACE -> subsurfaceTotalPixels.get()
+        }
+        if (total == 0L) return emptyList()
+
+        return counts.entries
+            .map { (id, count) ->
+                BiomeDistributionEntry(id, count.get() * 100.0 / total, count.get())
+            }
+            .sortedByDescending { it.percentage }
     }
 
     override suspend fun generateBiomeImage(point: MapTilePoint, tileSize: Int, lod: Int): Image {
@@ -32,17 +59,22 @@ class TerraBiomeImageGenerator(
 
         val pixels = IntArray(imageSize * imageSize)
 
+        val localSurfaceCounts = HashMap<String, Long>()
+        val localSubsurfaceCounts = HashMap<String, Long>()
+
         when (surfaceMode) {
             SurfaceMode.DEFAULT -> {
                 for (yi in 0 until imageSize) {
                     val rowOffset = yi * imageSize
                     for (xi in 0 until imageSize) {
-                        pixels[rowOffset + xi] = provider.getBiome(
+                        val biome = provider.getBiome(
                             worldX + xi * sampleStep,
                             0,
                             worldY + yi * sampleStep,
                             seed
-                        ).color
+                        )
+                        pixels[rowOffset + xi] = biome.color
+                        localSurfaceCounts.merge(biome.id, 1L, Long::plus)
                     }
                 }
             }
@@ -51,12 +83,15 @@ class TerraBiomeImageGenerator(
                 for (yi in 0 until imageSize) {
                     val rowOffset = yi * imageSize
                     for (xi in 0 until imageSize) {
-                        pixels[rowOffset + xi] = surfaceProvider.getBiome(
-                            worldX + xi * sampleStep,
-                            300,
-                            worldY + yi * sampleStep,
-                            seed
-                        ).color
+                        val px = worldX + xi * sampleStep
+                        val pz = worldY + yi * sampleStep
+                        val surfaceBiome = surfaceProvider.getBiome(px, 300, pz, seed)
+                        pixels[rowOffset + xi] = surfaceBiome.color
+                        localSurfaceCounts.merge(surfaceBiome.id, 1L, Long::plus)
+
+                        // Also track subsurface biome
+                        val subBiomeId = findSubsurfaceBiomeId(px, pz, provider, surfaceBiome)
+                        localSubsurfaceCounts.merge(subBiomeId, 1L, Long::plus)
                     }
                 }
             }
@@ -64,15 +99,34 @@ class TerraBiomeImageGenerator(
                 for (yi in 0 until imageSize) {
                     val rowOffset = yi * imageSize
                     for (xi in 0 until imageSize) {
-                        pixels[rowOffset + xi] = getSubsurfaceBiomeColor(
-                            worldX + xi * sampleStep,
-                            worldY + yi * sampleStep,
-                            provider
-                        )
+                        val px = worldX + xi * sampleStep
+                        val pz = worldY + yi * sampleStep
+                        val result = getSubsurfaceBiomeResult(px, pz, provider)
+                        pixels[rowOffset + xi] = result.color
+
+                        localSurfaceCounts.merge(result.surfaceId, 1L, Long::plus)
+                        localSubsurfaceCounts.merge(result.subsurfaceId, 1L, Long::plus)
                     }
                 }
             }
         }
+
+        val pixelCount = (imageSize * imageSize).toLong()
+
+        // Merge local counts into global counts
+        for ((id, count) in localSurfaceCounts) {
+            surfaceBiomeCounts.computeIfAbsent(id) { AtomicLong(0) }.addAndGet(count)
+        }
+        surfaceTotalPixels.addAndGet(pixelCount)
+
+        if (localSubsurfaceCounts.isNotEmpty()) {
+            for ((id, count) in localSubsurfaceCounts) {
+                subsurfaceBiomeCounts.computeIfAbsent(id) { AtomicLong(0) }.addAndGet(count)
+            }
+            subsurfaceTotalPixels.addAndGet(pixelCount)
+        }
+
+        distributionListener?.invoke()
 
         val img = WritableImage(imageSize, imageSize)
         img.pixelWriter.setPixels(0, 0, imageSize, imageSize, PixelFormat.getIntArgbInstance(), pixels, 0, imageSize)
@@ -80,7 +134,19 @@ class TerraBiomeImageGenerator(
         return img
     }
 
-    private fun getSubsurfaceBiomeColor(x: Int, z: Int, provider: BiomeProvider): Int {
+    private fun findSubsurfaceBiomeId(x: Int, z: Int, provider: BiomeProvider, surfaceBiome: Biome): String {
+        for (y in Y_LEVELS) {
+            val biome = provider.getBiome(x, y, z, seed)
+            if (biome.id != surfaceBiome.id) {
+                return biome.id
+            }
+        }
+        return surfaceBiome.id
+    }
+
+    private data class SubsurfaceResult(val color: Int, val surfaceId: String, val subsurfaceId: String)
+
+    private fun getSubsurfaceBiomeResult(x: Int, z: Int, provider: BiomeProvider): SubsurfaceResult {
         val surfaceProvider = getSurfaceProvider(provider)
         val surfaceBiome = surfaceProvider.getBiome(x, 300, z, seed)
         val isOcean = isOceanBiome(surfaceBiome)
@@ -88,12 +154,13 @@ class TerraBiomeImageGenerator(
         for (y in Y_LEVELS) {
             val biome = provider.getBiome(x, y, z, seed)
             if (biome.id != surfaceBiome.id) {
-                return biome.color
+                return SubsurfaceResult(biome.color, surfaceBiome.id, biome.id)
             }
         }
 
         // No extrusion applied - show simplified land/ocean
-        return if (isOcean) OCEAN_COLOR else LAND_COLOR
+        val color = if (isOcean) OCEAN_COLOR else LAND_COLOR
+        return SubsurfaceResult(color, surfaceBiome.id, surfaceBiome.id)
     }
 
     private fun isOceanBiome(biome: Biome): Boolean {
@@ -121,3 +188,5 @@ class TerraBiomeImageGenerator(
         }
     }
 }
+
+data class BiomeDistributionEntry(val biomeId: String, val percentage: Double, val pixelCount: Long)

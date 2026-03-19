@@ -43,6 +43,8 @@ class MapView(
 
     val configPack = tileGenerator.configPack
 
+    val biomeImageGenerator: BiomeImageGenerator = tileGenerator
+
     fun setMetricsListener(listener: ((Double) -> Unit)?) {
         map.setMetricsListener(listener)
     }

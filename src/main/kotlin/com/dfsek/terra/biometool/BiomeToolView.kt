@@ -61,6 +61,7 @@ import tornadofx.tab
 import tornadofx.tabpane
 import tornadofx.textarea
 import tornadofx.textfield
+import tornadofx.tooltip
 import tornadofx.toObservable
 import tornadofx.vbox
 import kotlin.concurrent.thread
@@ -101,8 +102,14 @@ class BiomeToolView : View("Biome Tool") {
 
     private val tabStates = mutableMapOf<Tab, TabState>()
     
+    private var distributionTextArea by singleAssign<TextArea>()
+
+    private var distributionModeButton by singleAssign<javafx.scene.control.Button>()
+
+    private var distributionMode = SurfaceMode.SURFACE
+
     private var loadingOverlay by singleAssign<StackPane>()
-    
+
     private var loadingLogView by singleAssign<LoadingLogView>()
     
     init {
@@ -143,6 +150,11 @@ class BiomeToolView : View("Biome Tool") {
                         item("Performance") {
                             action {
                                 toolWindows.performance.select()
+                            }
+                        }
+                        item("Distribution") {
+                            action {
+                                toolWindows.distribution.select()
                             }
                         }
                     }
@@ -214,19 +226,18 @@ class BiomeToolView : View("Biome Tool") {
                             
                             label("Seed") {
                                 padding = Insets(0.0, 0.0, 0.0, 16.0)
+                                style = "-fx-underline: true; -fx-cursor: hand;"
+                                tooltip("Click to generate a random seed")
+                                setOnMouseClicked {
+                                    val newSeed = random.nextLong()
+                                    seed.text = newSeed.toString()
+                                    addBiomeViewTab(seedLong = newSeed)
+                                }
                             }
-                            
+
                             seed = textfield {
                                 text = "1"
                                 filterInput { it.controlNewText.isLong() }
-                            }
-                            
-                            button("Random Seed") {
-                                action {
-                                    seed.text = random.nextLong().toString()
-                                    
-                                    addBiomeViewTab(seedLong = random.nextLong())
-                                }
                             }
                             
                             label("Coordinates:") {
@@ -277,13 +288,39 @@ class BiomeToolView : View("Biome Tool") {
                             OutputStreamAppender.outputStream = TextAreaOutputStream(this)
                         }
                         consoleTextArea.fitToParentSize()
-                        
+
                         fitToParentSize()
                     }
                     fitToParentSize()
                 }
-                
-                toolWindows = ToolWindows(worldPreview, performance, console)
+                val distribution = tab("Distribution") {
+                    vbox {
+                        hbox(6) {
+                            alignment = Pos.CENTER_LEFT
+                            padding = Insets(4.0, 8.0, 4.0, 8.0)
+
+                            label("View:")
+                            distributionModeButton = button("Surface") {
+                                action {
+                                    distributionMode = if (distributionMode == SurfaceMode.SURFACE) SurfaceMode.SUBSURFACE else SurfaceMode.SURFACE
+                                    text = distributionMode.displayName
+                                    updateDistributionDisplay()
+                                }
+                            }
+                        }
+
+                        distributionTextArea = textarea {
+                            isEditable = false
+                            font = Font.font("Monospaced", 13.0)
+                            text = "No distribution data yet."
+                        }
+                        distributionTextArea.fitToParentSize()
+                        fitToParentSize()
+                    }
+                    fitToParentSize()
+                }
+
+                toolWindows = ToolWindows(worldPreview, performance, console, distribution)
             }
         }
         
@@ -390,6 +427,58 @@ class BiomeToolView : View("Biome Tool") {
     })).apply {
         cycleCount = Animation.INDEFINITE
         play()
+    }
+
+    private val distributionUpdateTimeline = Timeline(KeyFrame(Duration.millis(1000.0), {
+        updateDistributionDisplay()
+    })).apply {
+        cycleCount = Animation.INDEFINITE
+        play()
+    }
+
+    private fun updateDistributionDisplay() {
+        val selectedTab = renderTabs.selectionModel.selectedItem ?: return
+        val state = tabStates[selectedTab] ?: return
+        val generator = state.mapView.biomeImageGenerator as? TerraBiomeImageGenerator ?: return
+        val entries = generator.getDistribution(distributionMode)
+        if (entries.isEmpty()) {
+            distributionTextArea.text = "No distribution data yet."
+            return
+        }
+        distributionTextArea.text = buildDistributionTable(entries)
+    }
+
+    private fun buildDistributionTable(entries: List<BiomeDistributionEntry>): String {
+        val headers = arrayOf("Biome", "Area %")
+        val rows = entries.map { arrayOf(it.biomeId, "%.2f%%".format(it.percentage)) }
+
+        val widths = IntArray(headers.size) { headers[it].length }
+        for (row in rows) {
+            for (i in row.indices) {
+                widths[i] = maxOf(widths[i], row[i].length)
+            }
+        }
+
+        val sb = StringBuilder()
+        for (i in headers.indices) {
+            if (i > 0) sb.append("  ")
+            sb.append(headers[i].padEnd(widths[i]))
+        }
+        sb.append("\n")
+        for (i in headers.indices) {
+            if (i > 0) sb.append("  ")
+            sb.append("-".repeat(widths[i]))
+        }
+        sb.append("\n")
+        for (row in rows) {
+            for (i in row.indices) {
+                if (i > 0) sb.append("  ")
+                if (i == 0) sb.append(row[i].padEnd(widths[i]))
+                else sb.append(row[i].padStart(widths[i]))
+            }
+            sb.append("\n")
+        }
+        return sb.toString()
     }
 
     private fun reload() {
@@ -532,6 +621,7 @@ class BiomeToolView : View("Biome Tool") {
         val worldPreview: Tab,
         val performance: Tab,
         val console: Tab,
+        val distribution: Tab,
                                    )
     
     private data class TabState(

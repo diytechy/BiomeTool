@@ -40,3 +40,29 @@ Each thread should prefer to fill the big-chunk (256x256 world grid, or 16 chunk
 
 Investigate performance issues with BiomeTool:
 When launching the current configuration (via C:\Projects\BiomeTool\CopyPacksAndLaunchLatestBuild.bat) it takes almost a minute to load.
+
+#########################################################
+
+You were interrupted in the middle of some updates:
+
+1. Sometimes the coordinates shown to the left of the biome become hidden / obscured as the biome label changes and shifts other information.
+As a solution to this, can the "Random Seed" dedicated button be removed / hidden, and then allow the current label for "Seed" to also act as a button to trigger generation of a new random seed.
+
+2. Next to the tab "Console" tab there should be a tab "Distribution" which includes in it's view:
+A. A button to change the view between "Surface" and "Subsurface".
+B. A table of values with the biome name in the first column, and in the second column the % of area that the corresponding biome has been rendered on the map.
+C. This information would be in sync with the tile view, so each new tile that renders also has this corresponding set of metrics evaluated, and vice versa if the user is on the render tab or the distribution tab.
+
+This was the to-do list you had generated and were in the process of implementing:
+
+Update Todos
+
+Remove Random Seed button, make Seed label clickable
+
+Add biome distribution tracking to TerraBiomeImageGenerator
+
+Expose biome generator from MapView
+
+Add Distribution tab to BiomeToolView
+
+Wire up distribution updates and tab sync
