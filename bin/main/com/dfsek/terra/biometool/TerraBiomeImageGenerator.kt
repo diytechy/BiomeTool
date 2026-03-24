@@ -40,9 +40,21 @@ class TerraBiomeImageGenerator(
         }
         if (total == 0L) return emptyList()
 
-        return counts.entries
-            .map { (id, count) ->
-                BiomeDistributionEntry(id, count.get() * 100.0 / total, count.get())
+        // Get all biome IDs from the config pack registry
+        val allBiomeIds = mutableSetOf<String>()
+        try {
+            configPack.getCheckedRegistry(com.dfsek.terra.api.world.biome.Biome::class.java)
+                .forEach { key, _ -> allBiomeIds.add(key.id) }
+        } catch (_: Exception) {
+            // Fall back to only showing observed biomes
+        }
+        // Also include any observed biomes (in case registry lookup missed some)
+        allBiomeIds.addAll(counts.keys)
+
+        return allBiomeIds
+            .map { id ->
+                val count = counts[id]?.get() ?: 0L
+                BiomeDistributionEntry(id, count * 100.0 / total, count)
             }
             .sortedByDescending { it.percentage }
     }

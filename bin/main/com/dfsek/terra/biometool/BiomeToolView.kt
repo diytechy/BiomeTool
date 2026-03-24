@@ -32,7 +32,9 @@ import javafx.scene.control.TextField
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import javafx.scene.text.Font
+import javafx.stage.FileChooser
 import javafx.util.Duration
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.SupervisorJob
@@ -307,6 +309,12 @@ class BiomeToolView : View("Biome Tool") {
                                     updateDistributionDisplay()
                                 }
                             }
+
+                            button("Export CSV") {
+                                action {
+                                    exportDistributionCsv()
+                                }
+                            }
                         }
 
                         distributionTextArea = textarea {
@@ -479,6 +487,32 @@ class BiomeToolView : View("Biome Tool") {
             sb.append("\n")
         }
         return sb.toString()
+    }
+
+    private fun exportDistributionCsv() {
+        val selectedTab = renderTabs.selectionModel.selectedItem ?: return
+        val state = tabStates[selectedTab] ?: return
+        val generator = state.mapView.biomeImageGenerator as? TerraBiomeImageGenerator ?: return
+        val entries = generator.getDistribution(distributionMode)
+        if (entries.isEmpty()) return
+
+        val fileChooser = FileChooser().apply {
+            title = "Export Distribution"
+            extensionFilters.add(FileChooser.ExtensionFilter("CSV Files", "*.csv"))
+            initialFileName = "distribution_${state.packKey}_${state.seed}_${distributionMode.displayName.lowercase()}.csv"
+        }
+        val file = fileChooser.showSaveDialog(primaryStage) ?: return
+
+        val sorted = entries.sortedBy { it.biomeId.lowercase() }
+        file.bufferedWriter().use { writer ->
+            writer.write("Biome,Area %,Pixel Count")
+            writer.newLine()
+            for (entry in sorted) {
+                writer.write("${entry.biomeId},${String.format("%.4f", entry.percentage)},${entry.pixelCount}")
+                writer.newLine()
+            }
+        }
+        logger.info { "Distribution exported to ${file.absolutePath}" }
     }
 
     private fun reload() {
