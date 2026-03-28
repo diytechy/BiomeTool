@@ -53,7 +53,7 @@ A. A button to change the view between "Surface" and "Subsurface".
 B. A table of values with the biome name in the first column, and in the second column the % of area that the corresponding biome has been rendered on the map.
 C. This information would be in sync with the tile view, so each new tile that renders also has this corresponding set of metrics evaluated, and vice versa if the user is on the render tab or the distribution tab.
 
-This was the to-do list you had generated and were in the process of implementing:
+This was the to-do list you had generated and were in the process of implementing, most of it may already be complete:
 
 Update Todos
 
@@ -66,3 +66,33 @@ Expose biome generator from MapView
 Add Distribution tab to BiomeToolView
 
 Wire up distribution updates and tab sync
+
+##########################################
+
+Plan for 3 updates:
+
+1. In the distribution tab, all biomes should be included even if they have not been allocated to in the pipeline yet.
+2. In the distribution tab, include an "Export" tab that saves the current distribution to a csv file, sorted alphabetically.
+3. Create a test script that can be launched with a batch file that can compute the tile render time (tiles per second) give a defined number of tiles (default 100x100) and a defined seed (default 1).  I will use this batch script to test different versions of Terra to see if the updates that have been made there are improving the biome pipeline performance.
+
+#########################################
+
+I want you to build a plan to perform a deep investigation on current performance reductions I've seen in Terra since the last update.
+
+The Terra build is located at "C:\Projects\Terra"
+The Terra pack I am evaluating (Called "CHIMERA") is located at "C:\Projects\ORIGEN2"
+
+The following commits describe the different states and will be referenced in the test results:
+Terra with auto-caching - Commit b00368d7d
+Terra without auto-caching - Commit 09bc6ecfaf
+CHIMERA with manually defined cache samplers   - Commit 3a40124ed
+CHIMERA with manual cache samplers removed - Commit 89e73f852
+
+I have tested the following combinations with RunBenchmark.bat:
+Terra without auto-caching with CHIMERA and manually defined caches - 18.3 Tiles / second
+Terra with auto-caching and CHIMERA with manually defined caches - 18.3 Tiles / second
+Terra with auto-caching and CHIMERA with manual caches removed - 13.6 Tiles / second
+
+I did not expect any performance drop with auto-caching.  Even if it's memory construction / destruction, I would expect that impact to be negligible.
+
+Please perform a thorough review and create any test scripts / debugs necessary to drill into this decrease in performance with auto-caching in Terra.
