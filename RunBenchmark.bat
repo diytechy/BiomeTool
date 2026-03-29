@@ -14,7 +14,7 @@ set "TILES_X=%~1"
 set "TILES_Y=%~2"
 set "SEED=%~3"
 
-if "%TILES_X%"=="" set "TILES_X=100"
+if "%TILES_X%"=="" set "TILES_X=35"
 if "%TILES_Y%"=="" set "TILES_Y=%TILES_X%"
 if "%SEED%"=="" set "SEED=1"
 
