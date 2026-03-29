@@ -96,3 +96,10 @@ Terra with auto-caching and CHIMERA with manual caches removed - 13.6 Tiles / se
 I did not expect any performance drop with auto-caching.  Even if it's memory construction / destruction, I would expect that impact to be negligible.
 
 Please perform a thorough review and create any test scripts / debugs necessary to drill into this decrease in performance with auto-caching in Terra.
+
+######################################3
+
+When I run "CopyPacksAndLaunchLatestBuild.bat", I see "Final reference counts:" and "riverSampler=0", but "riverSampler" is used over 10 times.
+
+Can you investigate why the recent auto-caching implementation in Terra (C:\Projects\Terra) does not appear to assess "riverSampler" accurately?
+
