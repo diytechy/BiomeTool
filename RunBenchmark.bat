@@ -1,6 +1,8 @@
 @echo off
 setlocal
 
+call CopyPacks.bat
+
 :: BiomeTool Benchmark Script
 :: Usage: RunBenchmark.bat [tilesX] [tilesY] [seed]
 :: Defaults: 100x100 tiles, seed 1
