@@ -1,22 +1,24 @@
 import com.github.jengelman.gradle.plugins.shadow.ShadowJavaPlugin
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-import java.net.URL
+import java.net.URI
 
 plugins {
     application
-    kotlin("jvm") version "2.1.21"
+    kotlin("jvm") version "2.3.0"
     id("org.openjfx.javafxplugin") version "0.1.0"
-    id("com.gradleup.shadow") version "8.3.6"
+    id("com.gradleup.shadow") version "8.3.9"
 }
 
-var mainClassName: String by application.mainClass
-mainClassName = "com.dfsek.terra.biometool.BiomeToolLauncher"
+application {
+    mainClass.set("com.dfsek.terra.biometool.BiomeToolLauncher")
+}
 
 group = "com.dfsek"
 version = "0.5.1"
 
-val runDir = file("$buildDir/run")
+val runDir = layout.buildDirectory.dir("run").get().asFile
 
 repositories {
     mavenLocal()  // Check local ~/.m2 first (use publish_to_maven_local.bat in Terra to populate)
@@ -44,8 +46,8 @@ repositories {
 }
 
 java {
-    targetCompatibility = JavaVersion.VERSION_21
-    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_25
+    sourceCompatibility = JavaVersion.VERSION_25
 }
 
 val javafxModules = listOf(
@@ -59,7 +61,7 @@ val javafxModules = listOf(
 )
 
 javafx {
-    version = "21.0.2"
+    version = "25.0.1"
     modules = javafxModules.map { "javafx.$it" }
 }
 
@@ -125,7 +127,7 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
 
-    val terraGitHash = "c3538321f"
+    val terraGitHash = "c811cc243"
 
     bootstrapTerraAddon("com.dfsek.terra:api-addon-loader:0.1.0-BETA-$terraGitHash")
     bootstrapTerraAddon("com.dfsek.terra:manifest-addon-loader:1.0.0-BETA-$terraGitHash")
@@ -201,7 +203,9 @@ tasks.test {
 }
 
 tasks.withType<KotlinCompile>() {
-    kotlinOptions.jvmTarget = "21"
+    compilerOptions {
+        jvmTarget.set(JvmTarget.fromTarget("25"))
+    }
 }
 
 val jar by tasks.jar
@@ -224,33 +228,33 @@ tasks.withType<ShadowJar>() {
     }
 }
 
-val javadocJar by tasks.creating(Jar::class) {
+val javadocJar by tasks.registering(Jar::class) {
     archiveClassifier.set("javadoc")
     dependsOn(javadoc)
     from(javadoc.destinationDir)
 }
 
-val sourcesJar by tasks.creating(Jar::class) {
+val sourcesJar by tasks.registering(Jar::class) {
     archiveClassifier.set("sources")
     from(sourceSets["main"].allSource)
 }
 
-val shadowJarLinux by tasks.creating(ShadowJar::class) {
+val shadowJarLinux by tasks.registering(ShadowJar::class) {
     archiveClassifier.set("linux")
     configurations = listOf(linuxImplementation)
 }
 
-val shadowJarWin by tasks.creating(ShadowJar::class) {
+val shadowJarWin by tasks.registering(ShadowJar::class) {
     archiveClassifier.set("win")
     configurations = listOf(windowsImplementation)
 }
 
-val shadowJarOSX by tasks.creating(ShadowJar::class) {
+val shadowJarOSX by tasks.registering(ShadowJar::class) {
     archiveClassifier.set("osx")
     configurations = listOf(osxImplementation)
 }
 
-val shadowJarAll by tasks.creating(ShadowJar::class) {
+val shadowJarAll by tasks.registering(ShadowJar::class) {
     archiveClassifier.set("all")
     configurations = listOf(linuxImplementation, windowsImplementation, osxImplementation)
 }
@@ -270,21 +274,21 @@ tasks.named("startShadowScripts") {
 tasks.withType<Jar>() {
     entryCompression = ZipEntryCompression.STORED
     manifest {
-        attributes(
-            "Main-Class" to mainClassName,
+        attributes(mapOf(
+            "Main-Class" to application.mainClass.get(),
             "Built-By" to System.getProperties()["user.name"],
             "Built-Jdk" to System.getProperties()["java.version"],
             "Name" to project.name,
             "Add-Opens" to "javafx.graphics/javafx.scene jdk.unsupported/sun.misc",
-        )
+        ))
     }
 }
 
-val downloadDefaultPacks: Task by tasks.creating() {
+val downloadDefaultPacks by tasks.registering {
     group = "application"
 
     doFirst {
-        val defaultPack = URL("https://github.com/PolyhedralDev/TerraOverworldConfig/releases/download/v1.5.1/default.zip")
+        val defaultPack = URI("https://github.com/PolyhedralDev/TerraOverworldConfig/releases/download/v1.5.1/default.zip").toURL()
         val fileName = defaultPack.file.substring(defaultPack.file.lastIndexOf("/"))
 
         file("$runDir/packs/").mkdirs()
@@ -294,7 +298,7 @@ val downloadDefaultPacks: Task by tasks.creating() {
 
 }
 
-val prepareRunAddons by tasks.creating(Sync::class) {
+val prepareRunAddons by tasks.registering(Sync::class) {
     group = "application"
     val terraAddonJars = terraAddon.resolvedConfiguration.firstLevelModuleDependencies.flatMap { dependency ->
         dependency.moduleArtifacts.map { it.file }
@@ -312,7 +316,7 @@ val prepareRunAddons by tasks.creating(Sync::class) {
     into("$runDir/addons")
 }
 
-val prepareDistAddons by tasks.creating(Sync::class) {
+val prepareDistAddons by tasks.registering(Sync::class) {
     group = "distribution"
     description = "Copies Terra addons to build/libs for standalone JAR usage"
 
@@ -329,7 +333,7 @@ val prepareDistAddons by tasks.creating(Sync::class) {
         into("bootstrap")
     }
 
-    into("$buildDir/libs/addons")
+    into(layout.buildDirectory.dir("libs/addons"))
 }
 
 tasks.getByName<JavaExec>("run") {
@@ -344,13 +348,15 @@ tasks.getByName<JavaExec>("run") {
     )
 }
 
-val createLauncherScripts by tasks.creating {
+val createLauncherScripts by tasks.registering {
     group = "distribution"
     description = "Creates launcher scripts for standalone JAR execution"
 
     doLast {
+        val libsDir = project.layout.buildDirectory.dir("libs").get().asFile
+
         // Windows batch script
-        file("$buildDir/libs/BiomeTool.bat").writeText("""
+        libsDir.resolve("BiomeTool.bat").writeText("""
 @echo off
 setlocal
 set "SCRIPT_DIR=%~dp0"
@@ -359,7 +365,7 @@ endlocal
 """.trimIndent())
 
         // Unix shell script
-        file("$buildDir/libs/BiomeTool.sh").writeText("""
+        libsDir.resolve("BiomeTool.sh").writeText("""
 #!/bin/bash
 SCRIPT_DIR="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
 java --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED -jar "${'$'}SCRIPT_DIR/BiomeTool-${project.version}-linux.jar" "${'$'}@"

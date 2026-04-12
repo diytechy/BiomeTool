@@ -19,7 +19,7 @@ if %ERRORLEVEL% EQU 0 (
 echo Starting BiomeTool...
 SET "scriptPath=%~dp0"
 cd "%scriptPath%build\libs"
-set JavaHome="C:\JAVA\jdk-23\bin\java"
+set JavaHome="C:\JAVA\jdk-25.0.1\bin\java"
 %JavaHome% -jar BiomeToolEnhanced-0.5.1-all.jar
 
 :end
