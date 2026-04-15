@@ -103,3 +103,6 @@ When I run "CopyPacksAndLaunchLatestBuild.bat", I see "Final reference counts:" 
 
 Can you investigate why the recent auto-caching implementation in Terra (C:\Projects\Terra) does not appear to assess "riverSampler" accurately?
 
+########################################
+
+I have updated Terra to Java 25 along with other updates (Terra short hash c811cc243), please update the BiomeTool to use this new Terra version and update it and gardlew to compile BiomeTool with Java version 25

@@ -33,7 +33,7 @@ for %%F in ("%DEST%\*.*") do (
 )
 
 set "SOURCE=C:\Projects\BiomeTool\build\libs\packs\terra-origen"
-set "DEST=C:\MC\MINECRAFT_SERVER_TMP_4BACKUP\plugins\Terra\packs\CHIMERA"
+set "DEST=C:\MC\MINECRAFT_SERVER_TMP_26-1\plugins\Terra\packs\CHIMERA"
 echo Destination: %DEST%
 echo.
 
@@ -42,6 +42,14 @@ robocopy "%SOURCE%" "%DEST%" /E ^
     /XD ".*" "_*" "OldPromptAndReviewReferences" "Review" ^
     /R:3 /W:5 /XO /NDL /NJH /NJS /purge
 
+
+echo.
+echo Compressing CHIMERA folder...
+set "CHIMERA_DIR=C:\MC\MINECRAFT_SERVER_TMP_26-1\plugins\Terra\packs\CHIMERA"
+set "CHIMERA_ZIP=C:\MC\MINECRAFT_SERVER_TMP_26-1\plugins\Terra\packs\CHIMERA.zip"
+if exist "%CHIMERA_ZIP%" del "%CHIMERA_ZIP%"
+powershell -NoProfile -Command "Compress-Archive -Path '%CHIMERA_DIR%\*' -DestinationPath '%CHIMERA_ZIP%'"
+echo CHIMERA.zip created.
 
 echo.
 echo Copy operation completed.
