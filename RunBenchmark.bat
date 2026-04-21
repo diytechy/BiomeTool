@@ -15,10 +15,12 @@ call CopyPacks.bat
 set "TILES_X=%~1"
 set "TILES_Y=%~2"
 set "SEED=%~3"
+set "SKIP_PAUSE=%~4"
 
 if "%TILES_X%"=="" set "TILES_X=35"
 if "%TILES_Y%"=="" set "TILES_Y=%TILES_X%"
 if "%SEED%"=="" set "SEED=1"
+if "%SKIP_PAUSE%"=="" set "SKIP_PAUSE=0"
 
 set "SCRIPT_DIR=%~dp0"
 set "JAR_DIR=%SCRIPT_DIR%build\libs"
@@ -48,5 +50,9 @@ cd "%JAR_DIR%"
 %JAVA% --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED -cp "%JAR%" com.dfsek.terra.biometool.BiomeBenchmark %TILES_X% %TILES_Y% %SEED% "%CSV_PREFIX%"
 
 echo.
+if "%SKIP_PAUSE%"=="1" goto end
+
 pause
+
+:end
 endlocal
