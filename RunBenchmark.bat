@@ -5,10 +5,10 @@ call CopyPacks.bat
 
 :: BiomeTool Benchmark Script
 :: Usage: RunBenchmark.bat [tilesX] [tilesY] [seed]
-:: Defaults: 100x100 tiles, seed 1
+:: Defaults: 35x35 tiles, seed 1
 ::
 :: Examples:
-::   RunBenchmark.bat              (100x100 tiles, seed 1)
+::   RunBenchmark.bat              (35x35 tiles, seed 1)
 ::   RunBenchmark.bat 50           (50x50 tiles, seed 1)
 ::   RunBenchmark.bat 100 100 42   (100x100 tiles, seed 42)
 
@@ -30,18 +30,22 @@ if not exist "%JAR%" (
     exit /b 1
 )
 
-set "JAVA_HOME_DIR=C:\JAVA\jdk-23\bin"
+set "JAVA_HOME_DIR=C:\JAVA\jdk-25.0.1\bin"
 if exist "%JAVA_HOME_DIR%\java.exe" (
     set "JAVA=%JAVA_HOME_DIR%\java"
 ) else (
     set "JAVA=java"
 )
 
+:: CSV output path - pack name is appended by the tool at runtime
+:: Pattern: benchmark_{W}x{H}_seed{S}_{PACK}.csv saved to project root
+set "CSV_PREFIX=%SCRIPT_DIR%benchmark_%TILES_X%x%TILES_Y%_seed%SEED%_"
+
 echo Launching benchmark with %TILES_X%x%TILES_Y% tiles, seed %SEED%...
 echo.
 
 cd "%JAR_DIR%"
-%JAVA% --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED -cp "%JAR%" com.dfsek.terra.biometool.BiomeBenchmark %TILES_X% %TILES_Y% %SEED%
+%JAVA% --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED -cp "%JAR%" com.dfsek.terra.biometool.BiomeBenchmark %TILES_X% %TILES_Y% %SEED% "%CSV_PREFIX%"
 
 echo.
 pause
