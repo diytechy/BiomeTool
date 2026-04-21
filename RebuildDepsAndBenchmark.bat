@@ -63,11 +63,17 @@ shift
 goto parse_args
 :args_done
 
-:: Validate: --terra requires --commit-msg
+:: Fall back to TERRA_COMMIT_MSG env var if --commit-msg was not provided.
+:: This allows callers (e.g. PowerShell) to set the message without multi-word
+:: quoting issues across the PowerShell->cmd->bat boundary.
+if "!COMMIT_MSG!"=="" if not "%TERRA_COMMIT_MSG%"=="" set "COMMIT_MSG=%TERRA_COMMIT_MSG%"
+
+:: Validate: --terra requires a commit message (from either source)
 if "%DO_TERRA%"=="1" (
     if "!COMMIT_MSG!"=="" (
-        echo ERROR: --terra requires --commit-msg "your message"
-        echo Example: RebuildDepsAndBenchmark.bat --terra --biometool --commit-msg "Fix A1 stream allocation"
+        echo ERROR: --terra requires a commit message. Provide via:
+        echo   --commit-msg "your message"
+        echo   or set env var: TERRA_COMMIT_MSG=your message
         exit /b 1
     )
 )
@@ -88,7 +94,7 @@ if "%DO_TECTONIC%"=="1" (
     echo [1/4] Building Tectonic and publishing to mavenLocal...
     echo       Source: %TECTONIC_DIR%
     pushd "%TECTONIC_DIR%"
-    call gradlew.bat publishToMavenLocal
+    call .\gradlew.bat publishToMavenLocal
     if errorlevel 1 (
         echo.
         echo ERROR: Tectonic build failed. Aborting.
@@ -108,10 +114,10 @@ if "%DO_TERRA%"=="1" (
     echo       Source: %TERRA_DIR%
     echo.
 
-    :: Phase 2a: Compile only — verify the build is clean before committing
+    :: Phase 2a: Compile only ? verify the build is clean before committing
     echo   [2a] Compiling Terra ^(verify only, no publish^)...
     pushd "%TERRA_DIR%"
-    call gradlew.bat build
+    call .\gradlew.bat build
     if errorlevel 1 (
         echo.
         echo ERROR: Terra compilation failed. Fix build errors before committing. Aborting.
@@ -143,7 +149,7 @@ if "%DO_TERRA%"=="1" (
     :: Phase 2c: Capture new short hash and publish to mavenLocal
     for /f "delims=" %%H in ('git -C "%TERRA_DIR%" rev-parse --short HEAD') do set "TERRA_HASH=%%H"
     echo   [2c] Publishing Terra to mavenLocal ^(hash: !TERRA_HASH!^)...
-    call gradlew.bat publishToMavenLocal
+    call .\gradlew.bat publishToMavenLocal
     if errorlevel 1 (
         echo.
         echo ERROR: Terra publishToMavenLocal failed. Aborting.
@@ -156,8 +162,7 @@ if "%DO_TERRA%"=="1" (
 
     :: Phase 2d: Update terraGitHash in BiomeTool build.gradle.kts
     echo   [2d] Updating terraGitHash in BiomeTool build.gradle.kts to !TERRA_HASH!...
-    powershell -NoProfile -Command ^
-        "(Get-Content '%BIOMETOOL_GRADLE%' -Raw) -replace 'val terraGitHash = \"[^\"]*\"', 'val terraGitHash = \"!TERRA_HASH!\"' | Set-Content '%BIOMETOOL_GRADLE%' -NoNewline"
+    powershell -NoProfile -File "%BIOMETOOL_DIR%\UpdateTerraHash.ps1" "!TERRA_HASH!" "%BIOMETOOL_GRADLE%"
     if errorlevel 1 (
         echo.
         echo ERROR: Failed to update terraGitHash in build.gradle.kts. Aborting.
@@ -177,7 +182,7 @@ if "%DO_BIOMETOOL%"=="1" (
     echo [3/4] Building BiomeTool...
     echo       Source: %BIOMETOOL_DIR%
     pushd "%BIOMETOOL_DIR%"
-    call gradlew.bat build
+    call .\gradlew.bat build
     if errorlevel 1 (
         echo.
         echo ERROR: BiomeTool build failed. Aborting.
