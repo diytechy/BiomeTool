@@ -33,7 +33,9 @@ object BiomeBenchmark {
 
         println("Initializing Terra platform...")
         val platform = BiomeToolPlatform
+        val reloadStart = System.nanoTime()
         platform.reload()
+        val packLoadMs = (System.nanoTime() - reloadStart) / 1_000_000.0
 
         val packs = platform.configRegistry.keys().toList()
         if (packs.isEmpty()) {
@@ -98,7 +100,7 @@ object BiomeBenchmark {
         println()
         println("Biome distribution saved to: ${csvFile.absolutePath}")
 
-        val resultsFile = appendBenchmarkResult(tilesX, tilesY, seed, packId, csvPrefix, elapsedSec, tilesPerSecond, pixelsPerSecond, elapsedMs / totalTiles)
+        val resultsFile = appendBenchmarkResult(tilesX, tilesY, seed, packId, csvPrefix, packLoadMs, elapsedSec, tilesPerSecond, pixelsPerSecond, elapsedMs / totalTiles)
         println("Benchmark result appended to:  ${resultsFile.absolutePath}")
     }
 
@@ -192,6 +194,7 @@ object BiomeBenchmark {
         seed: Long,
         packId: String,
         csvPrefix: String?,
+        packLoadMs: Double,
         totalTimeSec: Double,
         tilesPerSecond: Double,
         pixelsPerSecond: Double,
@@ -204,11 +207,11 @@ object BiomeBenchmark {
 
         java.io.FileWriter(file, /* append= */ true).buffered().use { writer ->
             if (isNew) {
-                writer.write("Timestamp,Pack,TilesX,TilesY,Seed,TotalTime_s,Tiles_per_s,Pixels_per_s,AvgMs_per_tile")
+                writer.write("Timestamp,Pack,TilesX,TilesY,Seed,PackLoad_ms,TotalTime_s,Tiles_per_s,Pixels_per_s,AvgMs_per_tile")
                 writer.newLine()
             }
             val ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-            writer.write("$ts,$packId,$tilesX,$tilesY,$seed,${"%.2f".format(totalTimeSec)},${"%.2f".format(tilesPerSecond)},${"%.0f".format(pixelsPerSecond)},${"%.3f".format(avgMsPerTile)}")
+            writer.write("$ts,$packId,$tilesX,$tilesY,$seed,${"%.1f".format(packLoadMs)},${"%.2f".format(totalTimeSec)},${"%.2f".format(tilesPerSecond)},${"%.0f".format(pixelsPerSecond)},${"%.3f".format(avgMsPerTile)}")
             writer.newLine()
         }
 
