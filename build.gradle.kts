@@ -1,4 +1,4 @@
-import com.github.jengelman.gradle.plugins.shadow.ShadowJavaPlugin
+﻿import com.github.jengelman.gradle.plugins.shadow.ShadowJavaPlugin
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -127,7 +127,7 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
 
-    val terraGitHash = "b75d4160d"
+    val terraGitHash = "7db5ef20b"
 
     bootstrapTerraAddon("com.dfsek.terra:api-addon-loader:0.1.0-BETA-$terraGitHash")
     bootstrapTerraAddon("com.dfsek.terra:manifest-addon-loader:1.0.0-BETA-$terraGitHash")
