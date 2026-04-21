@@ -106,3 +106,9 @@ Can you investigate why the recent auto-caching implementation in Terra (C:\Proj
 ########################################
 
 I have updated Terra to Java 25 along with other updates (Terra short hash c811cc243), please update the BiomeTool to use this new Terra version and update it and gardlew to compile BiomeTool with Java version 25
+
+####################################
+
+Update the BiomeTool's "C:\Projects\BiomeTool\RunBenchmark.bat" benchmark and corresponding file so that running a benchmark ALSO saves a csv file that indicates each surface level biome that was output (for each sample point) and how many times / how many points on the that biome was found.  This should check each sample point on the surface and subsurface.
+
+Additionally, when opening BiomeTool, make sure the "seed" value is restored from the last time BiomeTool was run.
