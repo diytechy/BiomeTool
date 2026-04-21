@@ -35,6 +35,7 @@ import javafx.scene.text.Font
 import javafx.stage.FileChooser
 import javafx.util.Duration
 import java.io.File
+import java.util.prefs.Preferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.SupervisorJob
@@ -238,7 +239,7 @@ class BiomeToolView : View("Biome Tool") {
                             }
 
                             seed = textfield {
-                                text = "1"
+                                text = loadSeed()
                                 filterInput { it.controlNewText.isLong() }
                             }
                             
@@ -267,7 +268,7 @@ class BiomeToolView : View("Biome Tool") {
                         }
                         
                         if (packSelection.selectedItem != null) {
-                            addBiomeViewTab(selectedPack = packSelection.selectedItem!!, seedLong = 1L)
+                            addBiomeViewTab(selectedPack = packSelection.selectedItem!!, seedLong = seed.text.toLongOrNull() ?: 1L)
                         }
                     }
                 }
@@ -584,7 +585,8 @@ class BiomeToolView : View("Biome Tool") {
         initialY: Double = 0.0,
         initialZoom: Double = 0.0,
         surfaceMode: SurfaceMode? = null,
-                               ): Tab {
+    ): Tab {
+        saveSeed(seedLong.toString())
         val effectiveSurfaceMode = surfaceMode ?: getSelectedSurfaceMode()
         val modeLabel = effectiveSurfaceMode.displayName
         return renderTabs.tab("$selectedPack:$seedLong:$modeLabel") {
@@ -645,10 +647,16 @@ class BiomeToolView : View("Biome Tool") {
         private val random = Random(Random.nextLong())
         private val scheduledThreadPool: ScheduledExecutorService =
             Executors.newScheduledThreadPool((runtime.processors).coerceAtLeast(1).coerceAtMost(4), BiomeToolThreadFactory)
-        
+
         private val coroutineDispatcher: ExecutorCoroutineDispatcher = scheduledThreadPool.asCoroutineDispatcher()
-        
+
         val scope = CoroutineScope(SupervisorJob() + coroutineDispatcher)
+
+        private val prefs: Preferences = Preferences.userNodeForPackage(BiomeToolView::class.java)
+        private const val PREF_SEED = "seed"
+
+        fun loadSeed(): String = prefs.get(PREF_SEED, "1")
+        fun saveSeed(value: String) = prefs.put(PREF_SEED, value)
     }
     
     internal data class ToolWindows(
