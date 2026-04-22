@@ -59,15 +59,15 @@ class TerraBiomeImageGenerator(
             .sortedByDescending { it.percentage }
     }
 
-    override suspend fun generateBiomeImage(point: MapTilePoint, tileSize: Int, lod: Int): Image {
+    override suspend fun generateBiomeImage(point: MapTilePoint, tileSize: Int, lod: Int, subsampleFactor: Int): Image {
         val (tileX, tileY) = point
 
         val provider = configPack.biomeProvider
-        val sampleStep = 1 shl lod
-        val imageSize = tileSize / sampleStep
+        val sampleStep = subsampleFactor shl lod
+        val imageSize = tileSize shr lod
 
-        val worldX = tileX * tileSize
-        val worldY = tileY * tileSize
+        val worldX = tileX * (tileSize * subsampleFactor)
+        val worldY = tileY * (tileSize * subsampleFactor)
 
         val pixels = IntArray(imageSize * imageSize)
 

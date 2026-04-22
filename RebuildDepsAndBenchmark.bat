@@ -201,7 +201,7 @@ if "%DO_BENCH%"=="1" (
     echo [4/4] Running benchmark...
     echo       (CopyPacks.bat will deploy ORIGEN2 pack automatically)
     echo.
-    call "%BIOMETOOL_DIR%\RunBenchmark.bat" 35 35 1 1
+    call "%BIOMETOOL_DIR%\RunBenchmark.bat" 35 35 1 1 4
     echo.
     echo Benchmark complete. Results:
     for %%F in ("%BIOMETOOL_DIR%\benchmark_*.csv") do (

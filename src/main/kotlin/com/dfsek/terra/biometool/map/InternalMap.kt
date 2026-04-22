@@ -17,10 +17,12 @@ import java.util.concurrent.atomic.AtomicLong
 
 class InternalMap(
     val scope: CoroutineScope,
-    val tileSize: Int,
-    val tileGenerator: BiomeImageGenerator
+    val tileGenerator: BiomeImageGenerator,
                  ) : Group() {
     private val logger by getLogger()
+
+    private var subsampleFactor: Int = 4
+    private val tileWorldSize: Int get() = TILE_PIXEL_SIZE * subsampleFactor
 
     private val tileCache = mutableMapOf<TileKey, ImageView>()
     private val displayedTiles = mutableMapOf<Long, DisplayedTile>()
@@ -104,10 +106,10 @@ class InternalMap(
     private fun updateTiles() {
         if (viewportWidth <= 0 || viewportHeight <= 0) return
 
-        val xMin = floorToInt(viewportX / tileSize) - 1
-        val yMin = floorToInt(viewportY / tileSize) - 1
-        val xMax = ceilToInt((viewportX + viewportWidth) / tileSize) + 1
-        val yMax = ceilToInt((viewportY + viewportHeight) / tileSize) + 1
+        val xMin = floorToInt(viewportX / tileWorldSize) - 1
+        val yMin = floorToInt(viewportY / tileWorldSize) - 1
+        val xMax = ceilToInt((viewportX + viewportWidth) / tileWorldSize) + 1
+        val yMax = ceilToInt((viewportY + viewportHeight) / tileWorldSize) + 1
 
         val visiblePositions = mutableSetOf<Long>()
         val tilesToGenerate = mutableListOf<TileGenRequest>()
@@ -153,7 +155,7 @@ class InternalMap(
     }
 
     private fun bigChunkKey(tileX: Int, tileY: Int): Long {
-        val bigChunkTiles = BIG_CHUNK_SIZE / tileSize
+        val bigChunkTiles = (BIG_CHUNK_SIZE / tileWorldSize).coerceAtLeast(1)
         val bcx = Math.floorDiv(tileX, bigChunkTiles)
         val bcy = Math.floorDiv(tileY, bigChunkTiles)
         return squash(bcx, bcy)
@@ -184,16 +186,17 @@ class InternalMap(
 
                     try {
                         val image = tileGenerator.generateBiomeImage(
-                            MapTilePoint(req.tileX, req.tileY), tileSize, req.lod
+                            MapTilePoint(req.tileX, req.tileY), TILE_PIXEL_SIZE, req.lod, subsampleFactor
                         )
 
+                        val worldSize = tileWorldSize
                         val imageView = ImageView(image).apply {
-                            fitWidth = tileSize.toDouble()
-                            fitHeight = tileSize.toDouble()
+                            fitWidth = worldSize.toDouble()
+                            fitHeight = worldSize.toDouble()
                             isPreserveRatio = false
                             isMouseTransparent = true
-                            translateX = (req.tileX * tileSize).toDouble()
-                            translateY = (req.tileY * tileSize).toDouble()
+                            translateX = (req.tileX * worldSize).toDouble()
+                            translateY = (req.tileY * worldSize).toDouble()
                         }
 
                         Platform.runLater {
@@ -264,6 +267,17 @@ class InternalMap(
         toRemove.forEach { key ->
             displayedTiles.remove(key)?.imageView?.let { children.remove(it) }
         }
+
+        // Evict cached images for tiles no longer in viewport
+        val cacheToRemove = tileCache.keys.filter { squash(it.x, it.y) !in visiblePositions }
+        cacheToRemove.forEach { tileCache.remove(it) }
+
+        // Evict fine-LOD entries for visible tiles where a coarser LOD is now displayed
+        val staleToRemove = tileCache.keys.filter { key ->
+            val pos = squash(key.x, key.y)
+            pos in visiblePositions && key.lod < (displayedTiles[pos]?.lod ?: Int.MAX_VALUE)
+        }
+        staleToRemove.forEach { tileCache.remove(it) }
     }
 
     override fun layoutChildren() {
@@ -289,13 +303,23 @@ class InternalMap(
         }
     }
 
+    fun setSubsampleFactor(factor: Int) {
+        cancelAllJobs()
+        tileCache.clear()
+        displayedTiles.values.forEach { children.remove(it.imageView) }
+        displayedTiles.clear()
+        subsampleFactor = factor
+        shouldUpdate()
+    }
+
     private data class TileKey(val x: Int, val y: Int, val lod: Int)
     private data class DisplayedTile(val imageView: ImageView, val lod: Int)
 
     private data class TileGenRequest(val tileX: Int, val tileY: Int, val lod: Int, val posKey: Long)
 
     companion object {
-        private const val MAX_LOD = 3
+        private const val TILE_PIXEL_SIZE = 128
+        private const val MAX_LOD = 5
         private const val BIG_CHUNK_SIZE = 256  // world blocks per big-chunk side
     }
 }
