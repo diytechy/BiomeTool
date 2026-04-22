@@ -21,9 +21,8 @@ import kotlin.math.roundToInt
 class MapView(
     scope: CoroutineScope,
     tileGenerator: BiomeImageGenerator,
-    private val tileSize: Int = 128,
              ) : Region() {
-    private val map = InternalMap(scope, tileSize, tileGenerator)
+    private val map = InternalMap(scope, tileGenerator)
 
     private val clip = Rectangle()
     private val scaleTransform = Scale(1.0, 1.0, 0.0, 0.0)
@@ -187,6 +186,10 @@ class MapView(
         map.cancelAllJobs()
     }
 
+    fun setSubsampleFactor(factor: Int) {
+        map.setSubsampleFactor(factor)
+    }
+
     private fun calculateLod(): Int = (-floor(zoomLevel)).toInt().coerceAtLeast(0)
 
     private fun copyToClipboard(text: String) {
@@ -219,7 +222,7 @@ class MapView(
     }
 
     companion object {
-        private const val MIN_ZOOM_LEVEL = -3.0
+        private const val MIN_ZOOM_LEVEL = -5.0
         private const val MAX_ZOOM_LEVEL = 3.0
         private const val ZOOM_STEP = 0.2
         private const val DRAG_THRESHOLD = 3.0

@@ -23,6 +23,7 @@ import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.control.ComboBox
 import javafx.scene.control.Label
+import javafx.util.StringConverter
 import javafx.scene.control.ProgressIndicator
 import javafx.scene.control.Tab
 import javafx.scene.control.TabPane
@@ -111,6 +112,8 @@ class BiomeToolView : View("Biome Tool") {
 
     private var distributionMode = SurfaceMode.SURFACE
 
+    private var subsampleCombo by singleAssign<ComboBox<Int>>()
+
     private var loadingOverlay by singleAssign<StackPane>()
 
     private var loadingLogView by singleAssign<LoadingLogView>()
@@ -158,6 +161,11 @@ class BiomeToolView : View("Biome Tool") {
                         item("Distribution") {
                             action {
                                 toolWindows.distribution.select()
+                            }
+                        }
+                        item("Settings") {
+                            action {
+                                toolWindows.settings.select()
                             }
                         }
                     }
@@ -329,7 +337,28 @@ class BiomeToolView : View("Biome Tool") {
                     fitToParentSize()
                 }
 
-                toolWindows = ToolWindows(worldPreview, performance, console, distribution)
+                val settings = tab("Settings") {
+                    vbox(8.0) {
+                        padding = Insets(12.0)
+                        hbox(8.0) {
+                            alignment = Pos.CENTER_LEFT
+                            label("Subsample")
+                            subsampleCombo = combobox(values = listOf(1, 2, 4, 8, 16, 32).toObservable()) {
+                                value = loadSubsample()
+                                converter = object : StringConverter<Int>() {
+                                    override fun toString(v: Int?) = "${v}x"
+                                    override fun fromString(s: String?) = s?.removeSuffix("x")?.toIntOrNull() ?: 4
+                                }
+                                valueProperty().addListener { _, _, newVal ->
+                                    if (newVal != null) applySubsample(newVal)
+                                }
+                            }
+                        }
+                    }
+                    fitToParentSize()
+                }
+
+                toolWindows = ToolWindows(worldPreview, performance, console, distribution, settings)
             }
         }
         
@@ -577,6 +606,11 @@ class BiomeToolView : View("Biome Tool") {
     
     private fun getSelectedSurfaceMode(): SurfaceMode = surfaceModeSelection.selectedItem ?: SurfaceMode.SURFACE
 
+    private fun applySubsample(factor: Int) {
+        saveSubsample(factor)
+        tabStates.values.forEach { it.mapView.setSubsampleFactor(factor) }
+    }
+
     private fun addBiomeViewTab(
         selectedPack: RegistryKey = packSelection.selectedItem!!,
         pack: ConfigPack = platform.configRegistry[selectedPack].get(),
@@ -592,7 +626,7 @@ class BiomeToolView : View("Biome Tool") {
         return renderTabs.tab("$selectedPack:$seedLong:$modeLabel") {
             select()
             
-            val mapView = mapview(BiomeToolView.scope, TerraBiomeImageGenerator(seedLong, pack, effectiveSurfaceMode), 128) {
+            val mapView = mapview(BiomeToolView.scope, TerraBiomeImageGenerator(seedLong, pack, effectiveSurfaceMode)) {
                 fitToParentSize()
                 if (initialX != 0.0 || initialY != 0.0 || initialZoom != 0.0) {
                     setPosition(initialX, initialY, initialZoom)
@@ -600,6 +634,8 @@ class BiomeToolView : View("Biome Tool") {
             }
 
             tabStates[this] = TabState(selectedPack, seedLong, mapView, initialX, initialY, initialZoom, effectiveSurfaceMode)
+
+            mapView.setSubsampleFactor(loadSubsample())
 
             // Set up metrics listener for this mapView
             mapView.setMetricsListener { tilesPerSecond ->
@@ -654,9 +690,12 @@ class BiomeToolView : View("Biome Tool") {
 
         private val prefs: Preferences = Preferences.userNodeForPackage(BiomeToolView::class.java)
         private const val PREF_SEED = "seed"
+        private const val PREF_SUBSAMPLE = "subsample"
 
         fun loadSeed(): String = prefs.get(PREF_SEED, "1")
         fun saveSeed(value: String) = prefs.put(PREF_SEED, value)
+        fun loadSubsample(): Int = prefs.getInt(PREF_SUBSAMPLE, 4)
+        fun saveSubsample(value: Int) = prefs.putInt(PREF_SUBSAMPLE, value)
     }
     
     internal data class ToolWindows(
@@ -664,6 +703,7 @@ class BiomeToolView : View("Biome Tool") {
         val performance: Tab,
         val console: Tab,
         val distribution: Tab,
+        val settings: Tab,
                                    )
     
     private data class TabState(
