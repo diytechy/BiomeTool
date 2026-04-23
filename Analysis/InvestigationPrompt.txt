@@ -112,3 +112,35 @@ I have updated Terra to Java 25 along with other updates (Terra short hash c811c
 Update the BiomeTool's "C:\Projects\BiomeTool\RunBenchmark.bat" benchmark and corresponding file so that running a benchmark ALSO saves a csv file that indicates each surface level biome that was output (for each sample point) and how many times / how many points on the that biome was found.  This should check each sample point on the surface and subsurface.
 
 Additionally, when opening BiomeTool, make sure the "seed" value is restored from the last time BiomeTool was run.
+
+###########################################
+
+Are tile images rendered for all LOD on a single tile query?  Are those basically just levels? (1 pixel per 1 x 1 block vs 1 pixel per 2x2 block)
+
+###################################
+
+When the BiomeBenchmark tool is running, is it sampling at each coordinate position?  (1,1 -> 1,2) until it hits the edge of the tile and continues down to the next row?
+
+#######################################
+
+I want to make a plan for the BiomeTool to be more representative of biome queries.  The external tool (typically minecraft) normally queries every 4th coordinate, which does not match this tool's benchmark or rendering.
+
+Make a plan for the following:
+
+1. Create a new tab called "Settings" with a "Subsample" entry with a drop down menu (1x, 2x, 4x, 8x, 16x, 32x) with a default value of 4x
+
+1a. When the user selects a new value here, it should wipe out all renders / caches.
+
+1b. All tile rendering should now render at this resolution step size (ex: if set to 2x, query 0,0, then 2,0, etc).
+
+1c. Update the BiomeBenchmark.bat to also allow this as an input as an argument to BiomeBenchmark.kt.
+
+1d. Render tiles according to this resolution.  But tiles should now default to 32x32 size (such that at a default subsample entry of 4x, will result in the tile covering a real map area of 128 x 128)
+
+2. Add logic to compress invisible tiles or tiles that are no longer shown at the current LOD.
+
+3. Consider adding higher LOD values to better support highly zoomed out views.
+
+##################################
+
+Note latest plan omits any updates to handle compression, but that can be performed later, any may not be as necessary.
