@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo Copying packs...
-call CopyPacks.bat
+::call CopyPacks.bat
 
 :: Check if BiomeTool is already running using PowerShell (more reliable)
 echo Checking if BiomeTool is already running...
