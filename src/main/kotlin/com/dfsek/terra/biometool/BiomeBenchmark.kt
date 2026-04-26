@@ -22,15 +22,21 @@ object BiomeBenchmark {
         val seed = args.getOrNull(2)?.toLongOrNull() ?: 1L
         val csvPrefix = args.getOrNull(3)
         val subsample = args.getOrNull(4)?.toIntOrNull() ?: 4
+        val lod = args.getOrNull(5)?.toIntOrNull() ?: 0
+
+        // Mirror the UI formula: world area per tile is always TILE_PIXEL_SIZE * subsample,
+        // regardless of LOD. LOD trades pixel count for speed, same as InternalMap / TerraBiomeImageGenerator.
+        val imageSize = TILE_PIXEL_SIZE shr lod
+        val sampleStep = subsample shl lod
 
         val totalTiles = tilesX * tilesY
 
         val tileWorldSize = TILE_PIXEL_SIZE * subsample
         println("=== BiomeTool Benchmark ===")
         println("Grid: ${tilesX}x${tilesY} tiles ($totalTiles total)")
-        println("Tile size: ${TILE_PIXEL_SIZE}x${TILE_PIXEL_SIZE} pixels (${tileWorldSize}x${tileWorldSize} world blocks)")
-        println("Subsample: ${subsample}x")
-        println("Total pixels: ${totalTiles.toLong() * TILE_PIXEL_SIZE * TILE_PIXEL_SIZE}")
+        println("Tile size: ${imageSize}x${imageSize} pixels (${tileWorldSize}x${tileWorldSize} world blocks)")
+        println("Subsample: ${subsample}x, LOD: $lod (effective stride: ${sampleStep} blocks/pixel)")
+        println("Total pixels: ${totalTiles.toLong() * imageSize * imageSize}")
         println("Seed: $seed")
         println()
 
@@ -60,7 +66,7 @@ object BiomeBenchmark {
         println("Warming up (4 tiles)...")
         for (tx in 0 until 2) {
             for (ty in 0 until 2) {
-                renderTile(provider, tx, ty, seed, subsample, surfaceCounts, subsurfaceCounts)
+                renderTile(provider, tx, ty, seed, subsample, imageSize, sampleStep, surfaceCounts, subsurfaceCounts)
             }
         }
         surfaceCounts.clear()
@@ -73,7 +79,7 @@ object BiomeBenchmark {
 
         for (tx in 0 until tilesX) {
             for (ty in 0 until tilesY) {
-                renderTile(provider, tx, ty, seed, subsample, surfaceCounts, subsurfaceCounts)
+                renderTile(provider, tx, ty, seed, subsample, imageSize, sampleStep, surfaceCounts, subsurfaceCounts)
             }
             // Progress update every 10 columns
             if ((tx + 1) % 10 == 0) {
@@ -88,7 +94,7 @@ object BiomeBenchmark {
         val elapsedMs = elapsedNs / 1_000_000.0
         val elapsedSec = elapsedMs / 1000.0
         val tilesPerSecond = totalTiles / elapsedSec
-        val pixelsPerSecond = (totalTiles.toLong() * TILE_PIXEL_SIZE * TILE_PIXEL_SIZE) / elapsedSec
+        val pixelsPerSecond = (totalTiles.toLong() * imageSize * imageSize) / elapsedSec
 
         println()
         println()
@@ -103,7 +109,7 @@ object BiomeBenchmark {
         println()
         println("Biome distribution saved to: ${csvFile.absolutePath}")
 
-        val resultsFile = appendBenchmarkResult(tilesX, tilesY, seed, packId, csvPrefix, packLoadMs, elapsedSec, tilesPerSecond, pixelsPerSecond, elapsedMs / totalTiles)
+        val resultsFile = appendBenchmarkResult(tilesX, tilesY, seed, subsample, lod, packId, csvPrefix, packLoadMs, elapsedSec, tilesPerSecond, pixelsPerSecond, elapsedMs / totalTiles)
         println("Benchmark result appended to:  ${resultsFile.absolutePath}")
     }
 
@@ -113,6 +119,8 @@ object BiomeBenchmark {
         tileY: Int,
         seed: Long,
         subsample: Int,
+        imageSize: Int,
+        sampleStep: Int,
         surfaceCounts: HashMap<String, Long>,
         subsurfaceCounts: HashMap<String, Long>,
     ) {
@@ -122,10 +130,10 @@ object BiomeBenchmark {
 
         val surfaceProvider = getSurfaceProvider(provider)
 
-        for (yi in 0 until TILE_PIXEL_SIZE) {
-            for (xi in 0 until TILE_PIXEL_SIZE) {
-                val px = worldX + xi * subsample
-                val pz = worldY + yi * subsample
+        for (yi in 0 until imageSize) {
+            for (xi in 0 until imageSize) {
+                val px = worldX + xi * sampleStep
+                val pz = worldY + yi * sampleStep
 
                 val surfaceBiome = surfaceProvider.getBiome(px, 300, pz, seed)
                 surfaceCounts.merge(surfaceBiome.id, 1L, Long::plus)
@@ -197,6 +205,8 @@ object BiomeBenchmark {
         tilesX: Int,
         tilesY: Int,
         seed: Long,
+        subsample: Int,
+        lod: Int,
         packId: String,
         csvPrefix: String?,
         packLoadMs: Double,
@@ -212,11 +222,11 @@ object BiomeBenchmark {
 
         java.io.FileWriter(file, /* append= */ true).buffered().use { writer ->
             if (isNew) {
-                writer.write("Timestamp,Pack,TilesX,TilesY,Seed,PackLoad_ms,TotalTime_s,Tiles_per_s,Pixels_per_s,AvgMs_per_tile")
+                writer.write("Timestamp,Pack,TilesX,TilesY,Seed,Subsample,LOD,PackLoad_ms,TotalTime_s,Tiles_per_s,Pixels_per_s,AvgMs_per_tile")
                 writer.newLine()
             }
             val ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-            writer.write("$ts,$packId,$tilesX,$tilesY,$seed,${"%.1f".format(packLoadMs)},${"%.2f".format(totalTimeSec)},${"%.2f".format(tilesPerSecond)},${"%.0f".format(pixelsPerSecond)},${"%.3f".format(avgMsPerTile)}")
+            writer.write("$ts,$packId,$tilesX,$tilesY,$seed,$subsample,$lod,${"%.1f".format(packLoadMs)},${"%.2f".format(totalTimeSec)},${"%.2f".format(tilesPerSecond)},${"%.0f".format(pixelsPerSecond)},${"%.3f".format(avgMsPerTile)}")
             writer.newLine()
         }
 
