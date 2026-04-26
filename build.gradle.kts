@@ -127,7 +127,7 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
 
-    val terraGitHash = "afd55bddb"
+    val terraGitHash = "1c0cf393c"
 
     bootstrapTerraAddon("com.dfsek.terra:api-addon-loader:0.1.0-BETA-$terraGitHash")
     bootstrapTerraAddon("com.dfsek.terra:manifest-addon-loader:1.0.0-BETA-$terraGitHash")
@@ -156,6 +156,7 @@ dependencies {
     terraAddon("com.dfsek.terra:language-yaml:1.0.0-BETA-$terraGitHash")
     terraAddon("com.dfsek.terra:library-image:1.1.0-BETA-$terraGitHash")
     terraAddon("com.dfsek.terra:locator-slant-noise-3d:1.0.0-BETA-$terraGitHash")
+    terraAddon("com.dfsek.terra:locator-surface-noise-3d:1.0.0-BETA-$terraGitHash")
     terraAddon("com.dfsek.terra:palette-block-shortcut:1.0.0-BETA-$terraGitHash")
     terraAddon("com.dfsek.terra:pipeline-image:1.0.0-BETA-$terraGitHash")
     terraAddon("com.dfsek.terra:structure-block-shortcut:1.0.0-BETA-$terraGitHash")
@@ -164,7 +165,7 @@ dependencies {
     terraAddon("com.dfsek.terra:structure-terrascript-loader:1.2.0-BETA-$terraGitHash")
     terraAddon("com.dfsek.terra:terrascript-function-check-noise-3d:1.0.1-BETA-$terraGitHash")
     terraAddon("com.dfsek.terra:terrascript-function-sampler:1.0.0-BETA-$terraGitHash")
-    terraAddon("com.github.diytechy:dendryterra:1.0.0-BETA-9")
+    terraAddon("com.github.diytechy:dendryterra:1.0.0-BETA-D")
 
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
