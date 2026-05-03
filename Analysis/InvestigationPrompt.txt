@@ -143,4 +143,8 @@ Make a plan for the following:
 
 ##################################
 
+The current benchmark displays tile rates far away from the tile rates shown in the UI.  Where the UI sometimmes shows upwards of 11 tiles per second, but the benchmark sits around 3 tiles per second.  Even when I simplify the sampler greatly, the UI will show up to almost 40 tiles per second, but the benchmark will max out around 4 tiles / second.  I believe the UI is multithreaded, but I would not expect this much of a difference, can you verify there is not a defect in the benchmark / timers?  What else could explain the in UI tile rate being so much higher than the benchmark?
+
+
+
 Note latest plan omits any updates to handle compression, but that can be performed later, any may not be as necessary.

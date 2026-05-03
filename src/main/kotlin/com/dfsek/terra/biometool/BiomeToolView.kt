@@ -401,7 +401,7 @@ class BiomeToolView : View("Biome Tool") {
             "%.2f ms".format(timings.average() / 1_000_000),
             "%.2f ms".format(timings.max().toDouble() / 1_000_000),
             "%.2f ms".format(timings.sum() / 1_000_000),
-            "%d".format(timings.timings.size)
+            "%d".format(timings.count())
         ))
         val subItems = timings.subItems
         for ((id, sub) in subItems) {
@@ -682,7 +682,7 @@ class BiomeToolView : View("Biome Tool") {
     companion object {
         private val random = Random(Random.nextLong())
         private val scheduledThreadPool: ScheduledExecutorService =
-            Executors.newScheduledThreadPool((runtime.processors).coerceAtLeast(1).coerceAtMost(4), BiomeToolThreadFactory)
+            Executors.newScheduledThreadPool((runtime.processors).coerceAtLeast(1).coerceAtMost(8), BiomeToolThreadFactory)
 
         private val coroutineDispatcher: ExecutorCoroutineDispatcher = scheduledThreadPool.asCoroutineDispatcher()
 
