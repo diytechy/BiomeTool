@@ -99,7 +99,8 @@ class InternalMap(
         viewportY = y
         viewportWidth = width
         viewportHeight = height
-        currentLod = lod
+        val lodOffset = Integer.numberOfTrailingZeros(subsampleFactor)
+        currentLod = (lod - lodOffset).coerceAtLeast(0)
         shouldUpdate()
     }
 
@@ -272,10 +273,10 @@ class InternalMap(
         val cacheToRemove = tileCache.keys.filter { squash(it.x, it.y) !in visiblePositions }
         cacheToRemove.forEach { tileCache.remove(it) }
 
-        // Evict fine-LOD entries for visible tiles where a coarser LOD is now displayed
+        // Evict coarse-LOD entries for visible tiles where a finer LOD is now displayed
         val staleToRemove = tileCache.keys.filter { key ->
             val pos = squash(key.x, key.y)
-            pos in visiblePositions && key.lod < (displayedTiles[pos]?.lod ?: Int.MAX_VALUE)
+            pos in visiblePositions && key.lod > (displayedTiles[pos]?.lod ?: Int.MAX_VALUE)
         }
         staleToRemove.forEach { tileCache.remove(it) }
     }
