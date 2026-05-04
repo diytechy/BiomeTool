@@ -1,9 +1,14 @@
 package com.dfsek.terra.biometool
 
+import com.dfsek.terra.api.config.ConfigPack
+import com.dfsek.terra.api.properties.Context
+import com.dfsek.terra.api.properties.PropertyKey
 import com.dfsek.terra.api.world.biome.generation.BiomeProvider
 import java.io.File
+import java.lang.reflect.Method
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Collections
 
 /**
  * Headless benchmark for measuring Terra biome pipeline performance.
@@ -62,11 +67,21 @@ object BiomeBenchmark {
         val surfaceCounts = HashMap<String, Long>()
         val subsurfaceCounts = HashMap<String, Long>()
 
-        // Warm-up: render a small area to initialize caches
+        // Build the overflow checker before warm-up so the status line prints early.
+        val overflowChecker = TerrainOverflowChecker(pack, provider, seed)
+        if (overflowChecker.available) {
+            val note = if (overflowChecker.configuredMaxY) "pack-configured" else "fallback — not set in pack"
+            println("Terrain overflow check ENABLED (blend.terrain.y-range.max = ${overflowChecker.blendMaxY} [$note])")
+        } else {
+            println("Terrain overflow check DISABLED (chunk-generator-noise-3d not detected in pack)")
+        }
+        println()
+
+        // Warm-up: render a small area to initialize caches (checker not active during warm-up)
         println("Warming up (4 tiles)...")
         for (tx in 0 until 2) {
             for (ty in 0 until 2) {
-                renderTile(provider, tx, ty, seed, subsample, imageSize, sampleStep, surfaceCounts, subsurfaceCounts)
+                renderTile(provider, tx, ty, seed, subsample, imageSize, sampleStep, surfaceCounts, subsurfaceCounts, null)
             }
         }
         surfaceCounts.clear()
@@ -79,7 +94,7 @@ object BiomeBenchmark {
 
         for (tx in 0 until tilesX) {
             for (ty in 0 until tilesY) {
-                renderTile(provider, tx, ty, seed, subsample, imageSize, sampleStep, surfaceCounts, subsurfaceCounts)
+                renderTile(provider, tx, ty, seed, subsample, imageSize, sampleStep, surfaceCounts, subsurfaceCounts, overflowChecker)
             }
             // Progress update every 10 columns
             if ((tx + 1) % 10 == 0) {
@@ -111,6 +126,15 @@ object BiomeBenchmark {
 
         val resultsFile = appendBenchmarkResult(tilesX, tilesY, seed, subsample, lod, packId, csvPrefix, packLoadMs, elapsedSec, tilesPerSecond, pixelsPerSecond, elapsedMs / totalTiles)
         println("Benchmark result appended to:  ${resultsFile.absolutePath}")
+
+        if (overflowChecker.available) {
+            val overflowFile = writeOverflowWarnings(tilesX, tilesY, seed, packId, csvPrefix, overflowChecker)
+            println()
+            println("Terrain overflow warnings:     ${overflowChecker.warningCount}")
+            if (overflowChecker.warningCount > 0) {
+                println("  Overflow file: ${overflowFile.absolutePath}")
+            }
+        }
     }
 
     private fun renderTile(
@@ -123,6 +147,7 @@ object BiomeBenchmark {
         sampleStep: Int,
         surfaceCounts: HashMap<String, Long>,
         subsurfaceCounts: HashMap<String, Long>,
+        overflowChecker: TerrainOverflowChecker?,
     ) {
         val tileWorldSize = TILE_PIXEL_SIZE * subsample
         val worldX = tileX * tileWorldSize
@@ -148,6 +173,8 @@ object BiomeBenchmark {
                     }
                 }
                 subsurfaceCounts.merge(subId, 1L, Long::plus)
+
+                overflowChecker?.checkPoint(px, pz)
             }
         }
     }
@@ -201,6 +228,40 @@ object BiomeBenchmark {
         return file
     }
 
+    private fun writeOverflowWarnings(
+        tilesX: Int,
+        tilesY: Int,
+        seed: Long,
+        packId: String,
+        csvPrefix: String?,
+        checker: TerrainOverflowChecker,
+    ): File {
+        val dir = if (csvPrefix != null) File(csvPrefix).parentFile ?: File(".") else File(".")
+        val file = File(dir, "terrain_overflow_${tilesX}x${tilesY}_seed${seed}_${packId}.txt")
+        file.parentFile?.mkdirs()
+
+        file.bufferedWriter().use { writer ->
+            val note = if (checker.configuredMaxY) "pack-configured" else "fallback, not set in pack"
+            writer.write("# Terrain overflow check: blend.terrain.y-range.max=${checker.blendMaxY} ($note)")
+            writer.newLine()
+            writer.write("# Tiles: ${tilesX}x${tilesY}, seed: $seed, pack: $packId")
+            writer.newLine()
+            writer.write("# Positions where terrain.sampler + terrain.sampler-2d density > 0 at y=${checker.blendMaxY}")
+            writer.newLine()
+            if (checker.warningCount == 0) {
+                writer.write("# No overflow detected")
+                writer.newLine()
+            } else {
+                for (warning in checker.getWarnings()) {
+                    writer.write(warning)
+                    writer.newLine()
+                }
+            }
+        }
+
+        return file
+    }
+
     private fun appendBenchmarkResult(
         tilesX: Int,
         tilesY: Int,
@@ -232,4 +293,160 @@ object BiomeBenchmark {
 
         return file
     }
+}
+
+/**
+ * Checks whether any biome at a given (x, z) generates terrain above the blend y-range ceiling
+ * by evaluating terrain.sampler (3D) + terrain.sampler-2d (2D) * blend.weight-2d at y=blendMaxY.
+ *
+ * All addon classes are accessed reflectively since chunk-generator-noise-3d is loaded by
+ * Terra's addon classloader rather than the main classpath. Method objects are cached after
+ * the first successful resolution so the hot path only pays the reflection cost once.
+ */
+private class TerrainOverflowChecker(
+    pack: ConfigPack,
+    private val provider: BiomeProvider,
+    private val seed: Long,
+) {
+    val blendMaxY: Int
+    val configuredMaxY: Boolean
+    val available: Boolean
+
+    private val warnings: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+    // PropertyKey<BiomeNoiseProperties> retrieved from Context's static class→key map.
+    private val noisePropsKey: Any?
+    // Context.get(PropertyKey) resolved once from the base API (always on classpath).
+    private val contextGetWithKey: Method?
+
+    // Lazily cached on first successful checkPoint — derived from the first live biome instance.
+    private var samplersMethod: Method? = null
+    private var baseMethod: Method? = null
+    private var elevationMethod: Method? = null
+    private var elevationWeightMethod: Method? = null
+    private var sample3DMethod: Method? = null
+    private var sample2DMethod: Method? = null
+    private var sample3DUsesDoubleCoords = true
+    private var sample2DUsesDoubleCoords = true
+
+    init {
+        // --- blendMaxY ---
+        val rawMax = try {
+            val cfg = pack.context.getByClassName(
+                "com.dfsek.terra.addons.chunkgenerator.config.NoiseChunkGeneratorPackConfigTemplate"
+            )
+            cfg?.javaClass?.getMethod("getBlendMaxY")?.invoke(cfg) as? Int ?: Int.MAX_VALUE
+        } catch (_: Exception) {
+            Int.MAX_VALUE
+        }
+        if (rawMax == Int.MAX_VALUE) {
+            blendMaxY = 320
+            configuredMaxY = false
+        } else {
+            blendMaxY = rawMax
+            configuredMaxY = true
+        }
+
+        // --- PropertyKey for BiomeNoiseProperties ---
+        // Context.create() stores keys in a static Map<Class, PropertyKey>. We locate the entry
+        // by class name so we don't need the addon class on our compile classpath.
+        var resolvedKey: Any? = null
+        var resolvedGetMethod: Method? = null
+        var resolvedAvailable = false
+        try {
+            val propertiesField = Context::class.java.getDeclaredField("properties")
+            propertiesField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val map = propertiesField.get(null) as Map<*, *>
+            resolvedKey = map.entries.firstOrNull { entry ->
+                (entry.key as? Class<*>)?.name ==
+                    "com.dfsek.terra.addons.chunkgenerator.config.noise.BiomeNoiseProperties"
+            }?.value
+
+            if (resolvedKey != null) {
+                resolvedGetMethod = Context::class.java.getMethod("get", PropertyKey::class.java)
+                resolvedAvailable = true
+            }
+        } catch (_: Exception) {
+            // addon not loaded — checker silently inactive
+        }
+        noisePropsKey = resolvedKey
+        contextGetWithKey = resolvedGetMethod
+        available = resolvedAvailable
+    }
+
+    fun checkPoint(x: Int, z: Int) {
+        if (!available) return
+        try {
+            val biome = provider.getBiome(x, blendMaxY, z, seed)
+            val noiseProps = contextGetWithKey!!.invoke(biome.context, noisePropsKey) ?: return
+
+            // Lazy method resolution — runs once, then reuses cached Method objects.
+            if (samplersMethod == null) resolveSamplerMethods(noiseProps)
+
+            val samplers = samplersMethod!!.invoke(noiseProps) ?: return
+            val base = baseMethod!!.invoke(samplers) ?: return
+            val elevation = elevationMethod!!.invoke(samplers) ?: return
+            val elevWeight = elevationWeightMethod!!.invoke(samplers) as? Double ?: 1.0
+
+            if (sample3DMethod == null) resolveSampleMethods(base, elevation)
+
+            val density3d = invokeSampler3D(base, x, blendMaxY, z) ?: return
+            val density2d = invokeSampler2D(elevation, x, z) ?: 0.0
+            val density = density3d + density2d * elevWeight
+
+            if (density > 0.0) {
+                warnings.add("x=$x z=$z y=$blendMaxY biome=${biome.id} density=${"%.6f".format(density)}")
+            }
+        } catch (_: Exception) {
+            // Swallow per-point exceptions — one bad biome must not abort the run.
+        }
+    }
+
+    private fun resolveSamplerMethods(noiseProps: Any) {
+        samplersMethod = noiseProps.javaClass.getMethod("samplers")
+        val samplers = samplersMethod!!.invoke(noiseProps)!!
+        baseMethod = samplers.javaClass.getMethod("base")
+        elevationMethod = samplers.javaClass.getMethod("elevation")
+        elevationWeightMethod = samplers.javaClass.getMethod("elevationWeight")
+    }
+
+    private fun resolveSampleMethods(base: Any, elevation: Any) {
+        // Prefer double-coordinate overload; fall back to int if that's all that exists.
+        sample3DMethod = preferDoubleOverload(base, paramCount = 4).also { m ->
+            sample3DUsesDoubleCoords = m?.parameterTypes?.getOrNull(1) == Double::class.javaPrimitiveType
+        }
+        sample2DMethod = preferDoubleOverload(elevation, paramCount = 3).also { m ->
+            sample2DUsesDoubleCoords = m?.parameterTypes?.getOrNull(1) == Double::class.javaPrimitiveType
+        }
+    }
+
+    private fun preferDoubleOverload(target: Any, paramCount: Int): Method? {
+        val candidates = target.javaClass.methods.filter { m ->
+            m.name == "getSample" && m.parameterCount == paramCount
+        }
+        return candidates.firstOrNull { m -> m.parameterTypes[1] == Double::class.javaPrimitiveType }
+            ?: candidates.firstOrNull()
+    }
+
+    private fun invokeSampler3D(sampler: Any, x: Int, y: Int, z: Int): Double? {
+        val m = sample3DMethod ?: return null
+        return if (sample3DUsesDoubleCoords) {
+            m.invoke(sampler, seed, x.toDouble(), y.toDouble(), z.toDouble()) as? Double
+        } else {
+            m.invoke(sampler, seed, x, y, z) as? Double
+        }
+    }
+
+    private fun invokeSampler2D(sampler: Any, x: Int, z: Int): Double? {
+        val m = sample2DMethod ?: return null
+        return if (sample2DUsesDoubleCoords) {
+            m.invoke(sampler, seed, x.toDouble(), z.toDouble()) as? Double
+        } else {
+            m.invoke(sampler, seed, x, z) as? Double
+        }
+    }
+
+    val warningCount get() = warnings.size
+    fun getWarnings(): List<String> = warnings.toList()
 }

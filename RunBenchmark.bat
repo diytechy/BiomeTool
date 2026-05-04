@@ -24,7 +24,7 @@ set "SKIP_PAUSE=%~4"
 set "SUBSAMPLE=%~5"
 set "LOD=%~6"
 
-if "%TILES_X%"=="" set "TILES_X=20"
+if "%TILES_X%"=="" set "TILES_X=200"
 if "%TILES_Y%"=="" set "TILES_Y=%TILES_X%"
 if "%SEED%"=="" set "SEED=1"
 if "%SKIP_PAUSE%"=="" set "SKIP_PAUSE=0"
