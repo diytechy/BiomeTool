@@ -22,7 +22,16 @@ import java.util.concurrent.atomic.AtomicLong
 object BiomeBenchmark {
 
     private const val TILE_PIXEL_SIZE = 128
-    private val Y_LEVELS = listOf(270, 240, 210, 180, 150, 120, 90, 60, 30, 0, -30, -60)
+
+    private fun packBlendMaxY(pack: ConfigPack): Int {
+        return try {
+            val cfg    = pack.context.getByClassName(
+                "com.dfsek.terra.addons.chunkgenerator.config.NoiseChunkGeneratorPackConfigTemplate"
+            )
+            val rawMax = cfg?.javaClass?.getMethod("getBlendMaxY")?.invoke(cfg) as? Int ?: Int.MAX_VALUE
+            if (rawMax == Int.MAX_VALUE) 320 else rawMax
+        } catch (_: Exception) { 320 }
+    }
 
     @JvmStatic
     fun main(args: Array<String>) {
@@ -69,6 +78,8 @@ object BiomeBenchmark {
 
         val provider        = pack.biomeProvider
         val surfaceProvider = getSurfaceProvider(provider)
+        val surfaceY        = packBlendMaxY(pack)
+        println("Surface sample Y: $surfaceY  |  Subsurface sample Y: 0")
 
         val overflowChecker: TerrainOverflowChecker? = if (overflowEnabled) TerrainOverflowChecker(pack, provider, seed) else null
         if (overflowChecker == null) {
@@ -91,7 +102,7 @@ object BiomeBenchmark {
         val warmupSurface    = HashMap<String, Long>()
         val warmupSubsurface = HashMap<String, Long>()
         for ((tx, ty) in snakeOrder.take(4)) {
-            renderTile(provider, surfaceProvider, tx, ty, seed, subsample, imageSize, sampleStep,
+            renderTile(provider, surfaceProvider, tx, ty, seed, subsample, imageSize, sampleStep, surfaceY,
                 warmupSurface, warmupSubsurface, checker = null)
         }
 
@@ -111,7 +122,7 @@ object BiomeBenchmark {
                 val localSubsurface = HashMap<String, Long>()
                 for ((tileX, tileY) in segment) {
                     renderTile(provider, surfaceProvider, tileX, tileY, seed, subsample,
-                        imageSize, sampleStep, localSurface, localSubsurface, overflowChecker)
+                        imageSize, sampleStep, surfaceY, localSurface, localSubsurface, overflowChecker)
                     tilesCompleted.incrementAndGet()
                 }
                 TileRenderResult(localSurface, localSubsurface)
@@ -231,6 +242,7 @@ object BiomeBenchmark {
         subsample: Int,
         imageSize: Int,
         sampleStep: Int,
+        surfaceY: Int,
         surfaceCounts: HashMap<String, Long>,
         subsurfaceCounts: HashMap<String, Long>,
         checker: TerrainOverflowChecker?,
@@ -244,18 +256,11 @@ object BiomeBenchmark {
                 val px = worldX + xi * sampleStep
                 val pz = worldZ + zi * sampleStep
 
-                val surfaceBiome = surfaceProvider.getBiome(px, 300, pz, seed)
+                val surfaceBiome = surfaceProvider.getBiome(px, surfaceY, pz, seed)
                 surfaceCounts.merge(surfaceBiome.id, 1L, Long::plus)
 
-                var subId = surfaceBiome.id
-                for (y in Y_LEVELS) {
-                    val biome = provider.getBiome(px, y, pz, seed)
-                    if (biome.id != surfaceBiome.id) {
-                        subId = biome.id
-                        break
-                    }
-                }
-                subsurfaceCounts.merge(subId, 1L, Long::plus)
+                val subsurfaceBiome = provider.getBiome(px, 0, pz, seed)
+                subsurfaceCounts.merge(subsurfaceBiome.id, 1L, Long::plus)
 
                 if (checker != null && xi % checker.stride == 0 && zi % checker.stride == 0) {
                     checker.checkPoint(px, pz)
