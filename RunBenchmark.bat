@@ -29,7 +29,7 @@ set "LOD=%~6"
 set "THREADS=%~7"
 set "OVERFLOW_CHECK=%~8"
 
-if "%TILES_X%"==""       set "TILES_X=20"
+if "%TILES_X%"==""       set "TILES_X=10"
 if "%TILES_Y%"==""       set "TILES_Y=%TILES_X%"
 if "%SEED%"==""          set "SEED=1"
 if "%SKIP_PAUSE%"==""    set "SKIP_PAUSE=0"
