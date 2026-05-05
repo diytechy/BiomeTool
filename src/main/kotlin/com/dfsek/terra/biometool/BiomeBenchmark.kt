@@ -32,7 +32,8 @@ object BiomeBenchmark {
         val csvPrefix    = args.getOrNull(3)
         val subsample    = args.getOrNull(4)?.toIntOrNull() ?: 4
         val lod          = args.getOrNull(5)?.toIntOrNull() ?: 0
-        val threadCount  = (args.getOrNull(6)?.toIntOrNull() ?: 4).coerceAtLeast(1)
+        val threadCount      = (args.getOrNull(6)?.toIntOrNull() ?: 4).coerceAtLeast(1)
+        val overflowEnabled  = (args.getOrNull(7)?.toIntOrNull() ?: 1) != 0
 
         val imageSize     = TILE_PIXEL_SIZE shr lod
         val sampleStep    = subsample shl lod
@@ -69,10 +70,14 @@ object BiomeBenchmark {
         val provider        = pack.biomeProvider
         val surfaceProvider = getSurfaceProvider(provider)
 
-        val overflowChecker = TerrainOverflowChecker(pack, provider, seed)
-        if (overflowChecker.available) {
-            val note = if (overflowChecker.configuredMaxY) "pack-configured" else "fallback — not set in pack"
+        val overflowChecker: TerrainOverflowChecker? = if (overflowEnabled) TerrainOverflowChecker(pack, provider, seed) else null
+        if (overflowChecker == null) {
+            println("Terrain overflow check DISABLED (--overflow-check=0)")
+        } else if (overflowChecker.available) {
+            val note        = if (overflowChecker.configuredMaxY) "pack-configured" else "fallback — not set in pack"
+            val worldStride = overflowChecker.stride * sampleStep
             println("Terrain overflow check ENABLED (blend.terrain.y-range.max = ${overflowChecker.blendMaxY} [$note])")
+            println("  Overflow sample stride: every ${overflowChecker.stride} pixels / ~$worldStride world blocks (1 in ${overflowChecker.stride * overflowChecker.stride} pixels)")
         } else {
             println("Terrain overflow check DISABLED (chunk-generator-noise-3d not detected in pack)")
         }
@@ -158,7 +163,7 @@ object BiomeBenchmark {
             packLoadMs, elapsedSec, tilesPerSecond, pixelsPerSecond, elapsedMs / totalTiles)
         println("Benchmark result appended to:  ${resultsFile.absolutePath}")
 
-        if (overflowChecker.available) {
+        if (overflowChecker?.available == true) {
             val overflowFile = writeOverflowWarnings(tilesX, tilesY, seed, packId, csvPrefix, overflowChecker)
             println()
             println("Terrain overflow warnings:     ${overflowChecker.warningCount}")
@@ -252,7 +257,9 @@ object BiomeBenchmark {
                 }
                 subsurfaceCounts.merge(subId, 1L, Long::plus)
 
-                checker?.checkPoint(px, pz)
+                if (checker != null && xi % checker.stride == 0 && zi % checker.stride == 0) {
+                    checker.checkPoint(px, pz)
+                }
             }
         }
     }
@@ -386,6 +393,7 @@ private class TerrainOverflowChecker(
     pack: ConfigPack,
     private val provider: BiomeProvider,
     private val seed: Long,
+    val stride: Int = 8,
 ) {
     val blendMaxY: Int
     val configuredMaxY: Boolean
