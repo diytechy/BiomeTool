@@ -9,10 +9,12 @@ import java.lang.reflect.Method
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.LongAdder
 
 /**
  * Headless benchmark for measuring Terra biome pipeline performance.
@@ -81,7 +83,7 @@ object BiomeBenchmark {
         val surfaceY        = packBlendMaxY(pack)
         println("Surface sample Y: $surfaceY  |  Subsurface sample Y: 0")
 
-        val overflowChecker: TerrainOverflowChecker? = if (overflowEnabled) TerrainOverflowChecker(pack, provider, seed) else null
+        val overflowChecker: TerrainOverflowChecker? = if (overflowEnabled) TerrainOverflowChecker(pack, provider, surfaceProvider, seed) else null
         if (overflowChecker == null) {
             println("Terrain overflow check DISABLED (--overflow-check=0)")
         } else if (overflowChecker.available) {
@@ -164,8 +166,11 @@ object BiomeBenchmark {
         println("Pixels/second:    %,.0f".format(pixelsPerSecond))
         println("Avg ms/tile:      %.3f".format(elapsedMs / totalTiles))
 
-        val packId   = packKey.getID()
-        val csvFile  = writeBiomeCsv(tilesX, tilesY, seed, packId, csvPrefix, surfaceCounts, subsurfaceCounts)
+        val packId         = packKey.getID()
+        val samplerStats   = overflowChecker?.getSamplerStats()
+        val noNoiseProps   = overflowChecker?.getNoNoisePropsCounts()
+        val evalErrors     = overflowChecker?.getEvalErrorCounts()
+        val csvFile  = writeBiomeCsv(tilesX, tilesY, seed, packId, csvPrefix, surfaceCounts, subsurfaceCounts, samplerStats, noNoiseProps, evalErrors)
         println()
         println("Biome distribution saved to: ${csvFile.absolutePath}")
 
@@ -294,21 +299,43 @@ object BiomeBenchmark {
         csvPrefix: String?,
         surfaceCounts: HashMap<String, Long>,
         subsurfaceCounts: HashMap<String, Long>,
+        samplerStats: Map<String, SamplerTiming>? = null,
+        noNoiseProps: Map<String, Long>? = null,
+        evalErrors: Map<String, Long>? = null,
     ): File {
         val file = if (csvPrefix != null) File("${csvPrefix}${packId}.csv")
                    else File("benchmark_${tilesX}x${tilesY}_seed${seed}_${packId}.csv")
 
         val surfaceTotal    = surfaceCounts.values.sum().coerceAtLeast(1L)
         val subsurfaceTotal = subsurfaceCounts.values.sum().coerceAtLeast(1L)
-        val allBiomes       = (surfaceCounts.keys + subsurfaceCounts.keys).toSortedSet()
+        val overflowEnabled = samplerStats != null
+        val allBiomes       = (surfaceCounts.keys + subsurfaceCounts.keys +
+                               (samplerStats?.keys ?: emptySet()) +
+                               (noNoiseProps?.keys ?: emptySet()) +
+                               (evalErrors?.keys ?: emptySet())).toSortedSet()
 
         file.bufferedWriter().use { writer ->
-            writer.write("Biome,Surface Count,Surface %,Subsurface Count,Subsurface %")
+            val header = buildString {
+                append("Biome,Surface Count,Surface %,Subsurface Count,Subsurface %")
+                if (overflowEnabled) append(",Overflow Samples,Avg Sampler µs,No Noise Props,Eval Errors")
+            }
+            writer.write(header)
             writer.newLine()
             for (id in allBiomes) {
                 val sc  = surfaceCounts[id] ?: 0L
                 val ssc = subsurfaceCounts[id] ?: 0L
-                writer.write("$id,$sc,${"%.4f".format(sc * 100.0 / surfaceTotal)},$ssc,${"%.4f".format(ssc * 100.0 / subsurfaceTotal)}")
+                val row = buildString {
+                    append("$id,$sc,${"%.4f".format(sc * 100.0 / surfaceTotal)},$ssc,${"%.4f".format(ssc * 100.0 / subsurfaceTotal)}")
+                    if (overflowEnabled) {
+                        val st    = samplerStats?.get(id)
+                        val count = st?.sampleCount ?: 0L
+                        val avgUs = if (st != null && st.sampleCount > 0L) st.avgMicros else 0.0
+                        val nnp   = noNoiseProps?.get(id) ?: 0L
+                        val err   = evalErrors?.get(id) ?: 0L
+                        append(",$count,${"%.2f".format(avgUs)},$nnp,$err")
+                    }
+                }
+                writer.write(row)
                 writer.newLine()
             }
         }
@@ -382,8 +409,12 @@ object BiomeBenchmark {
 }
 
 // =============================================================================
-// Terrain overflow checker
+// Terrain overflow checker + sampler timing
 // =============================================================================
+
+private data class SamplerTiming(val sampleCount: Long, val avgNs: Double) {
+    val avgMicros: Double get() = avgNs / 1000.0
+}
 
 /**
  * Checks whether any biome at a given (x, z) generates terrain at or above the blend
@@ -397,14 +428,25 @@ object BiomeBenchmark {
 private class TerrainOverflowChecker(
     pack: ConfigPack,
     private val provider: BiomeProvider,
+    private val surfaceProvider: BiomeProvider,
     private val seed: Long,
-    val stride: Int = 8,
+    val stride: Int = 1,
 ) {
     val blendMaxY: Int
     val configuredMaxY: Boolean
     val available: Boolean
 
     private val warnings: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+    // Per-biome sampler timing — LongAdder is designed for concurrent updates without contention.
+    private val biomeSamplerNs    = ConcurrentHashMap<String, LongAdder>()
+    private val biomeSamplerCount = ConcurrentHashMap<String, LongAdder>()
+
+    // Diagnostic counters: track why checkPoint exits early per biome.
+    // noNoiseProps: provider returned a biome with no BiomeNoiseProperties in its context.
+    // evalErrors:   an exception was thrown during the reflection / sampler evaluation chain.
+    private val biomeNoNoiseProps = ConcurrentHashMap<String, LongAdder>()
+    private val biomeEvalErrors   = ConcurrentHashMap<String, LongAdder>()
 
     // PropertyKey<BiomeNoiseProperties> from Context's static class→key map, and the
     // Context.get(PropertyKey) method — both resolved once in the constructor.
@@ -477,7 +519,10 @@ private class TerrainOverflowChecker(
     private fun tryResolveMethods(): ResolvedMethods? {
         if (!available) return null
         return try {
-            val biome      = provider.getBiome(0, blendMaxY, 0, seed)
+            // Use surfaceProvider (unwrapped 2D pipeline) — y is ignored by the pipeline so any
+            // value works.  The extruded provider may return synthetic wrapper biomes at blendMaxY
+            // that were never registered with the NOISE_3D addon and therefore have no noise properties.
+            val biome      = surfaceProvider.getBiome(0, 0, 0, seed)
             val noiseProps = contextGetWithKey!!.invoke(biome.context, noisePropsKey) ?: return null
 
             val samplersM    = noiseProps.javaClass.getMethod("samplers")
@@ -507,13 +552,23 @@ private class TerrainOverflowChecker(
 
     fun checkPoint(x: Int, z: Int) {
         val m = methods ?: return
+        var biomeId = "<unknown>"
         try {
-            val biome      = provider.getBiome(x, blendMaxY, z, seed)
-            val noiseProps = contextGetWithKey!!.invoke(biome.context, noisePropsKey) ?: return
-            val samplers   = m.samplers.invoke(noiseProps) ?: return
-            val base       = m.base.invoke(samplers)      ?: return
-            val elevation  = m.elevation.invoke(samplers) ?: return
+            val biome  = provider.getBiome(x, blendMaxY, z, seed)
+            biomeId    = biome.id
+
+            val noisePropsRaw = contextGetWithKey!!.invoke(biome.context, noisePropsKey)
+            if (noisePropsRaw == null) {
+                biomeNoNoiseProps.computeIfAbsent(biomeId) { LongAdder() }.increment()
+                return
+            }
+
+            val samplers   = m.samplers.invoke(noisePropsRaw) ?: return
+            val base       = m.base.invoke(samplers)          ?: return
+            val elevation  = m.elevation.invoke(samplers)     ?: return
             val elevWeight = m.elevWeight.invoke(samplers) as? Double ?: 1.0
+
+            val t0 = System.nanoTime()
 
             val density3d = if (m.sample3DDouble) {
                 m.sample3D.invoke(base, seed, x.toDouble(), blendMaxY.toDouble(), z.toDouble()) as? Double
@@ -527,12 +582,16 @@ private class TerrainOverflowChecker(
                 m.sample2D.invoke(elevation, seed, x, z) as? Double ?: 0.0
             }
 
+            val elapsedNs = System.nanoTime() - t0
+            biomeSamplerNs.computeIfAbsent(biomeId) { LongAdder() }.add(elapsedNs)
+            biomeSamplerCount.computeIfAbsent(biomeId) { LongAdder() }.increment()
+
             val density = density3d + density2d * elevWeight
             if (density > 0.0) {
-                warnings.add("x=$x z=$z y=$blendMaxY biome=${biome.id} density=${"%.6f".format(density)}")
+                warnings.add("x=$x z=$z y=$blendMaxY biome=$biomeId density=${"%.6f".format(density)}")
             }
         } catch (_: Exception) {
-            // Swallow per-point exceptions — one bad biome must not abort the run.
+            biomeEvalErrors.computeIfAbsent(biomeId) { LongAdder() }.increment()
         }
     }
 
@@ -546,4 +605,17 @@ private class TerrainOverflowChecker(
 
     val warningCount: Int get() = warnings.size
     fun getWarnings(): List<String> = warnings.toList()
+
+    fun getSamplerStats(): Map<String, SamplerTiming> =
+        biomeSamplerCount.entries.associate { (id, countAdder) ->
+            val count   = countAdder.sum()
+            val totalNs = biomeSamplerNs[id]?.sum() ?: 0L
+            id to SamplerTiming(count, if (count > 0L) totalNs.toDouble() / count else 0.0)
+        }
+
+    fun getNoNoisePropsCounts(): Map<String, Long> =
+        biomeNoNoiseProps.entries.associate { (id, adder) -> id to adder.sum() }
+
+    fun getEvalErrorCounts(): Map<String, Long> =
+        biomeEvalErrors.entries.associate { (id, adder) -> id to adder.sum() }
 }

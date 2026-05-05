@@ -1,4 +1,9 @@
 # Terrain overflow check: blend.terrain.y-range.max=270 (pack-configured)
 # Tiles: 10x10, seed: 1, pack: CHIMERA
 # Positions where terrain.sampler + terrain.sampler-2d density > 0 at y=270
-# No overflow detected
+x=2556 z=780 y=270 biome=CANOPY_CASCADES density=18.589905
+x=2540 z=784 y=270 biome=CANOPY_CASCADES density=24.767567
+x=2548 z=784 y=270 biome=CANOPY_CASCADES density=62.921404
+x=2536 z=788 y=270 biome=CANOPY_CASCADES density=20.800715
+x=2432 z=900 y=270 biome=CANOPY_CASCADES density=15.544562
+x=2428 z=904 y=270 biome=CANOPY_CASCADES density=270.187581

@@ -1,0 +1,1 @@
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Csv benchmark_10x10_seed1_CHIMERA.csv |Out-GridView -Wait"
