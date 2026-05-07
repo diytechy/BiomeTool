@@ -3,6 +3,7 @@ package com.dfsek.terra.biometool
 import com.dfsek.terra.api.config.ConfigPack
 import com.dfsek.terra.api.properties.Context
 import com.dfsek.terra.api.properties.PropertyKey
+import com.dfsek.terra.api.world.biome.Biome
 import com.dfsek.terra.api.world.biome.generation.BiomeProvider
 import java.io.File
 import java.lang.reflect.Method
@@ -91,6 +92,14 @@ object BiomeBenchmark {
             val worldStride = overflowChecker.stride * sampleStep
             println("Terrain overflow check ENABLED (blend.terrain.y-range.max = ${overflowChecker.blendMaxY} [$note])")
             println("  Overflow sample stride: every ${overflowChecker.stride} pixels / ~$worldStride world blocks (1 in ${overflowChecker.stride * overflowChecker.stride} pixels)")
+
+            val missingNoiseProps = overflowChecker.scanMissingNoiseProps(pack)
+            if (missingNoiseProps.isEmpty()) {
+                println("  All pack biomes have terrain.sampler registered.")
+            } else {
+                println("  Biomes with no terrain.sampler (overflow check N/A — no BiomeNoiseProperties): ${missingNoiseProps.size}")
+                missingNoiseProps.forEach { id -> println("    - $id") }
+            }
         } else {
             println("Terrain overflow check DISABLED (chunk-generator-noise-3d not detected in pack)")
         }
@@ -185,6 +194,19 @@ object BiomeBenchmark {
             println("Terrain overflow warnings:     ${overflowChecker.warningCount}")
             if (overflowChecker.warningCount > 0) {
                 println("  Overflow file: ${overflowFile.absolutePath}")
+            }
+
+            val firstErrors = overflowChecker.getFirstErrors()
+            if (firstErrors.isNotEmpty()) {
+                val errorCounts = overflowChecker.getEvalErrorCounts()
+                println()
+                println("=== Sampler Eval Errors (first exception per biome) ===")
+                firstErrors.entries
+                    .sortedByDescending { errorCounts[it.key] ?: 0L }
+                    .forEach { (biome, msg) ->
+                        val count = errorCounts[biome] ?: 0L
+                        println("  [$count] $biome: $msg")
+                    }
             }
         }
     }
@@ -447,6 +469,8 @@ private class TerrainOverflowChecker(
     // evalErrors:   an exception was thrown during the reflection / sampler evaluation chain.
     private val biomeNoNoiseProps = ConcurrentHashMap<String, LongAdder>()
     private val biomeEvalErrors   = ConcurrentHashMap<String, LongAdder>()
+    // First root-cause exception message per biome — stored once for diagnosis.
+    private val biomeFirstError   = ConcurrentHashMap<String, String>()
 
     // PropertyKey<BiomeNoiseProperties> from Context's static class→key map, and the
     // Context.get(PropertyKey) method — both resolved once in the constructor.
@@ -590,17 +614,33 @@ private class TerrainOverflowChecker(
             if (density > 0.0) {
                 warnings.add("x=$x z=$z y=$blendMaxY biome=$biomeId density=${"%.6f".format(density)}")
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             biomeEvalErrors.computeIfAbsent(biomeId) { LongAdder() }.increment()
+            biomeFirstError.putIfAbsent(biomeId, rootCause(e))
         }
     }
 
     private fun preferDoubleOverload(target: Any, paramCount: Int): Method? {
-        val candidates = target.javaClass.methods.filter { m ->
+        // Resolve getSample from the root seismic Sampler interface so the Method is valid
+        // for ANY Sampler implementation, not just the probe biome's concrete class.
+        // Without this, calling a Method declared on e.g. NoiseFunction against a
+        // DeferredExpressionSampler throws "not an instance of NoiseFunction".
+        val source = findRootSamplerInterface(target.javaClass) ?: target.javaClass
+        val candidates = source.methods.filter { m ->
             m.name == "getSample" && m.parameterCount == paramCount
         }
         return candidates.firstOrNull { m -> m.parameterTypes[1] == Double::class.javaPrimitiveType }
             ?: candidates.firstOrNull()
+    }
+
+    /** Walks the full type hierarchy to find the root com.dfsek.seismic Sampler interface. */
+    private fun findRootSamplerInterface(cls: Class<*>): Class<*>? {
+        if (cls.isInterface && cls.simpleName == "Sampler" &&
+            cls.name.startsWith("com.dfsek.seismic")) return cls
+        for (iface in cls.interfaces) {
+            findRootSamplerInterface(iface)?.let { return it }
+        }
+        return cls.superclass?.let { findRootSamplerInterface(it) }
     }
 
     val warningCount: Int get() = warnings.size
@@ -618,4 +658,34 @@ private class TerrainOverflowChecker(
 
     fun getEvalErrorCounts(): Map<String, Long> =
         biomeEvalErrors.entries.associate { (id, adder) -> id to adder.sum() }
+
+    fun getFirstErrors(): Map<String, String> = HashMap(biomeFirstError)
+
+    private fun rootCause(e: Exception): String {
+        var cause: Throwable = e
+        while (cause is java.lang.reflect.InvocationTargetException && cause.cause != null) {
+            cause = cause.cause!!
+        }
+        return "${cause.javaClass.simpleName}: ${cause.message ?: "(no message)"}"
+    }
+
+    /**
+     * Scans every biome in the pack registry once at startup and returns the IDs of those
+     * that have no BiomeNoiseProperties in their context (no terrain.sampler in their config
+     * or inheritance chain, or a failure during the NOISE_3D event-load for that biome).
+     * Returns an empty list if the scan cannot run (unavailable, registry access failed, etc.).
+     */
+    fun scanMissingNoiseProps(pack: ConfigPack): List<String> {
+        if (!available) return emptyList()
+        return try {
+            val missing = mutableListOf<String>()
+            pack.getCheckedRegistry(Biome::class.java).forEach { key, biome ->
+                val hasProps = try {
+                    contextGetWithKey!!.invoke(biome.context, noisePropsKey) != null
+                } catch (_: Exception) { false }
+                if (!hasProps) missing.add(key.id)
+            }
+            missing.sorted()
+        } catch (_: Exception) { emptyList() }
+    }
 }

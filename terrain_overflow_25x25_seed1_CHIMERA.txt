@@ -1,4 +1,4 @@
 # Terrain overflow check: blend.terrain.y-range.max=321 (pack-configured)
-# Tiles: 10x10, seed: 1, pack: CHIMERA
+# Tiles: 25x25, seed: 1, pack: CHIMERA
 # Positions where terrain.sampler + terrain.sampler-2d density > 0 at y=321
 # No overflow detected
