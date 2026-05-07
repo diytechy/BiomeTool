@@ -1,4 +1,20 @@
-# Terrain overflow check: blend.terrain.y-range.max=270 (pack-configured)
+# Terrain overflow check: blend.terrain.y-range.max=321 (pack-configured)
 # Tiles: 20x20, seed: 1, pack: CHIMERA
-# Positions where terrain.sampler + terrain.sampler-2d density > 0 at y=270
-# No overflow detected
+# Positions where terrain.sampler + terrain.sampler-2d density > 0 at y=321
+x=3000 z=9704 y=321 biome=CANOPY_CASCADES density=176.337409
+x=3176 z=10004 y=321 biome=CANOPY_CASCADES density=180.264992
+x=8424 z=7132 y=321 biome=CANOPY_CASCADES density=72.193512
+x=2428 z=904 y=321 biome=CANOPY_CASCADES density=207.446293
+x=9124 z=7804 y=321 biome=CANOPY_CASCADES density=118.130568
+x=9116 z=7808 y=321 biome=CANOPY_CASCADES density=300.532024
+x=9120 z=7808 y=321 biome=CANOPY_CASCADES density=65.131190
+x=9108 z=7812 y=321 biome=CANOPY_CASCADES density=1294.999984
+x=9112 z=7812 y=321 biome=CANOPY_CASCADES density=157.640243
+x=9116 z=7812 y=321 biome=CANOPY_CASCADES density=3.833879
+x=9104 z=7816 y=321 biome=CANOPY_CASCADES density=477.795597
+x=9108 z=7816 y=321 biome=CANOPY_CASCADES density=66.100105
+x=6472 z=6708 y=321 biome=CANOPY_CASCADES density=500.559410
+x=9068 z=7304 y=321 biome=CANOPY_CASCADES density=808.695942
+x=4688 z=7272 y=321 biome=CANOPY_CASCADES density=153.229469
+x=4684 z=7276 y=321 biome=CANOPY_CASCADES density=326.847721
+x=4820 z=7408 y=321 biome=CANOPY_CASCADES density=660.178447
