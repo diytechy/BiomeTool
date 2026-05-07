@@ -359,17 +359,119 @@ val createLauncherScripts by tasks.registering {
         // Windows batch script
         libsDir.resolve("BiomeTool.bat").writeText("""
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 set "SCRIPT_DIR=%~dp0"
-java --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED -jar "%SCRIPT_DIR%BiomeTool-${project.version}-win.jar" %*
-endlocal
+set "JAVA_EXE="
+
+rem --- Try java on PATH first ---
+where java >nul 2>&1
+if !errorlevel! equ 0 call :check_version java
+if defined JAVA_EXE goto :launch
+
+rem --- Search common Java 25 install locations ---
+call :search_dir "%ProgramFiles%\Eclipse Adoptium"
+if defined JAVA_EXE goto :launch
+call :search_dir "%ProgramFiles%\Microsoft"
+if defined JAVA_EXE goto :launch
+call :search_dir "%ProgramFiles%\Java"
+if defined JAVA_EXE goto :launch
+call :search_dir "%ProgramFiles%\BellSoft"
+if defined JAVA_EXE goto :launch
+call :search_dir "%ProgramFiles%\Amazon Corretto"
+if defined JAVA_EXE goto :launch
+call :search_dir "%ProgramFiles%\SapMachine"
+if defined JAVA_EXE goto :launch
+for /d %%J in ("%ProgramFiles%\Azul Systems\Zulu\zulu25*") do (
+    if exist "%%~J\bin\java.exe" if not defined JAVA_EXE call :check_version "%%~J\bin\java.exe"
+)
+if defined JAVA_EXE goto :launch
+
+echo ERROR: Java 25 not found.
+echo Please install Java 25 and ensure it is on your PATH.
+echo Download from: https://adoptium.net/
+pause
+exit /b 1
+
+:launch
+echo Using Java: !JAVA_EXE!
+"!JAVA_EXE!" --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED -jar "%SCRIPT_DIR%BiomeTool-${project.version}-all.jar" %*
+set "EXIT_CODE=!errorlevel!"
+if !EXIT_CODE! neq 0 (
+    echo.
+    echo BiomeTool exited with error code !EXIT_CODE!
+    pause
+)
+exit /b !EXIT_CODE!
+
+:search_dir
+for /d %%J in ("%~1\jdk-25*" "%~1\jre-25*" "%~1\jdk25*") do (
+    if exist "%%~J\bin\java.exe" if not defined JAVA_EXE call :check_version "%%~J\bin\java.exe"
+)
+exit /b 0
+
+:check_version
+set "_JVER="
+"%~1" -version >"%TEMP%\_jver_check.txt" 2>&1
+for /f "tokens=3" %%v in ('findstr /i "version" "%TEMP%\_jver_check.txt"') do (
+    if not defined _JVER set "_JVER=%%~v"
+)
+del "%TEMP%\_jver_check.txt" >nul 2>&1
+if not defined _JVER exit /b 0
+for /f "delims=." %%m in ("!_JVER!") do if "%%m" == "25" set "JAVA_EXE=%~1"
+exit /b 0
 """.trimIndent())
 
         // Unix shell script
         libsDir.resolve("BiomeTool.sh").writeText("""
 #!/bin/bash
 SCRIPT_DIR="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
-java --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED -jar "${'$'}SCRIPT_DIR/BiomeTool-${project.version}-linux.jar" "${'$'}@"
+JAVA_EXE=""
+
+check_version() {
+    local java_bin="${'$'}1"
+    local ver major
+    ver=${'$'}("${'$'}java_bin" -version 2>&1 | grep -i 'version' | head -1 | sed 's/.*version "\([^"]*\)".*/\1/')
+    major=${'$'}(echo "${'$'}ver" | cut -d'.' -f1)
+    if [ "${'$'}major" = "25" ]; then
+        JAVA_EXE="${'$'}java_bin"
+    fi
+}
+
+# Try java on PATH first
+if command -v java >/dev/null 2>&1; then
+    check_version "${'$'}(command -v java)"
+fi
+
+# Search common Java 25 install locations
+if [ -z "${'$'}JAVA_EXE" ]; then
+    for base in /usr/lib/jvm /usr/local/lib/jvm /opt/java /opt/jdk /usr/java; do
+        if [ -d "${'$'}base" ]; then
+            for jdir in "${'$'}base"/java-25* "${'$'}base"/jdk-25* "${'$'}base"/jdk25*; do
+                [ -x "${'$'}jdir/bin/java" ] && [ -z "${'$'}JAVA_EXE" ] && check_version "${'$'}jdir/bin/java"
+            done
+        fi
+    done
+fi
+
+if [ -z "${'$'}JAVA_EXE" ]; then
+    echo "ERROR: Java 25 not found."
+    echo "Please install Java 25 and ensure it is on your PATH."
+    echo "Download from: https://adoptium.net/"
+    read -rp "Press Enter to exit..." _
+    exit 1
+fi
+
+echo "Using Java: ${'$'}JAVA_EXE"
+"${'$'}JAVA_EXE" --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED \
+    --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED \
+    -jar "${'$'}SCRIPT_DIR/BiomeTool-${project.version}-all.jar" "${'$'}@"
+EXIT_CODE=${'$'}?
+if [ ${'$'}EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "BiomeTool exited with error code ${'$'}EXIT_CODE"
+    read -rp "Press Enter to exit..." _
+fi
+exit ${'$'}EXIT_CODE
 """.trimIndent())
     }
 }
