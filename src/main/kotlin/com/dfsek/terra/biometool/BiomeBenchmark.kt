@@ -52,6 +52,8 @@ object BiomeBenchmark {
         val totalTiles    = tilesX * tilesY
         val tileWorldSize = TILE_PIXEL_SIZE * subsample
         val stripWidth    = maxOf(1, 1000 / tileWorldSize)
+        val originX       = -(tilesX * tileWorldSize) / 2
+        val originZ       = -(tilesY * tileWorldSize) / 2
 
         println("=== BiomeTool Benchmark ===")
         println("Grid: ${tilesX}x${tilesY} tiles ($totalTiles total)")
@@ -113,7 +115,7 @@ object BiomeBenchmark {
         val warmupSurface    = HashMap<String, Long>()
         val warmupSubsurface = HashMap<String, Long>()
         for ((tx, ty) in snakeOrder.take(4)) {
-            renderTile(provider, surfaceProvider, tx, ty, seed, subsample, imageSize, sampleStep, surfaceY,
+            renderTile(provider, surfaceProvider, tx, ty, originX, originZ, seed, subsample, imageSize, sampleStep, surfaceY,
                 warmupSurface, warmupSubsurface, checker = null)
         }
 
@@ -132,7 +134,7 @@ object BiomeBenchmark {
                 val localSurface    = HashMap<String, Long>()
                 val localSubsurface = HashMap<String, Long>()
                 for ((tileX, tileY) in segment) {
-                    renderTile(provider, surfaceProvider, tileX, tileY, seed, subsample,
+                    renderTile(provider, surfaceProvider, tileX, tileY, originX, originZ, seed, subsample,
                         imageSize, sampleStep, surfaceY, localSurface, localSubsurface, overflowChecker)
                     tilesCompleted.incrementAndGet()
                 }
@@ -169,11 +171,16 @@ object BiomeBenchmark {
 
         println()
         println()
+        val worldMaxX = originX + tilesX * tileWorldSize
+        val worldMaxZ = originZ + tilesY * tileWorldSize
+
         println("=== Results ===")
         println("Total time:       %.2f s".format(elapsedSec))
         println("Tiles/second:     %.2f".format(tilesPerSecond))
         println("Pixels/second:    %,.0f".format(pixelsPerSecond))
         println("Avg ms/tile:      %.3f".format(elapsedMs / totalTiles))
+        println("World X range:    $originX .. $worldMaxX")
+        println("World Z range:    $originZ .. $worldMaxZ")
 
         val packId         = packKey.getID()
         val samplerStats   = overflowChecker?.getSamplerStats()
@@ -265,6 +272,8 @@ object BiomeBenchmark {
         surfaceProvider: BiomeProvider,
         tileX: Int,
         tileY: Int,
+        originX: Int,
+        originZ: Int,
         seed: Long,
         subsample: Int,
         imageSize: Int,
@@ -275,8 +284,8 @@ object BiomeBenchmark {
         checker: TerrainOverflowChecker?,
     ) {
         val tileWorldSize = TILE_PIXEL_SIZE * subsample
-        val worldX = tileX * tileWorldSize
-        val worldZ = tileY * tileWorldSize
+        val worldX = originX + tileX * tileWorldSize
+        val worldZ = originZ + tileY * tileWorldSize
 
         for (zi in 0 until imageSize) {
             for (xi in 0 until imageSize) {
