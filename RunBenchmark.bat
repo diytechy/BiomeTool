@@ -56,8 +56,8 @@ if exist "%JAVA_HOME_DIR%\java.exe" (
 )
 
 :: CSV output path - pack name is appended by the tool at runtime
-:: Pattern: benchmark_{W}x{H}_seed{S}_{PACK}.csv saved to project root
-set "CSV_PREFIX=%SCRIPT_DIR%benchmark_%TILES_X%x%TILES_Y%_seed%SEED%_"
+:: Pattern: benchmark_{PACK}.csv saved to project root (stable filename for diffing between iterations)
+set "CSV_PREFIX=%SCRIPT_DIR%benchmark_"
 
 echo Launching benchmark with %TILES_X%x%TILES_Y% tiles, seed %SEED%, subsample %SUBSAMPLE%x, lod %LOD%, %THREADS% thread(s), overflow=%OVERFLOW_CHECK%...
 echo.
