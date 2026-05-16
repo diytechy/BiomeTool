@@ -165,7 +165,7 @@ dependencies {
     terraAddon("com.dfsek.terra:structure-terrascript-loader:1.2.0-BETA-$terraGitHash")
     terraAddon("com.dfsek.terra:terrascript-function-check-noise-3d:1.0.1-BETA-$terraGitHash")
     terraAddon("com.dfsek.terra:terrascript-function-sampler:1.0.0-BETA-$terraGitHash")
-    terraAddon("com.github.diytechy:dendryterra:1.0.0-BETA-D")
+    terraAddon("com.github.diytechy:dendryterra:1.0.0-BETA-F")
 
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")

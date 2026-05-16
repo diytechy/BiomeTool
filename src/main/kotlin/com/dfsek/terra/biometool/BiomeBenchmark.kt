@@ -186,7 +186,7 @@ object BiomeBenchmark {
         val samplerStats   = overflowChecker?.getSamplerStats()
         val noNoiseProps   = overflowChecker?.getNoNoisePropsCounts()
         val evalErrors     = overflowChecker?.getEvalErrorCounts()
-        val csvFile  = writeBiomeCsv(tilesX, tilesY, seed, packId, csvPrefix, surfaceCounts, subsurfaceCounts, samplerStats, noNoiseProps, evalErrors)
+        val csvFile  = writeBiomeCsv(packId, csvPrefix, surfaceCounts, subsurfaceCounts, samplerStats, noNoiseProps, evalErrors)
         println()
         println("Biome distribution saved to: ${csvFile.absolutePath}")
 
@@ -323,9 +323,6 @@ object BiomeBenchmark {
     // -------------------------------------------------------------------------
 
     private fun writeBiomeCsv(
-        tilesX: Int,
-        tilesY: Int,
-        seed: Long,
         packId: String,
         csvPrefix: String?,
         surfaceCounts: HashMap<String, Long>,
@@ -335,7 +332,7 @@ object BiomeBenchmark {
         evalErrors: Map<String, Long>? = null,
     ): File {
         val file = if (csvPrefix != null) File("${csvPrefix}${packId}.csv")
-                   else File("benchmark_${tilesX}x${tilesY}_seed${seed}_${packId}.csv")
+                   else File("benchmark_${packId}.csv")
 
         val surfaceTotal    = surfaceCounts.values.sum().coerceAtLeast(1L)
         val subsurfaceTotal = subsurfaceCounts.values.sum().coerceAtLeast(1L)
@@ -343,7 +340,8 @@ object BiomeBenchmark {
         val allBiomes       = (surfaceCounts.keys + subsurfaceCounts.keys +
                                (samplerStats?.keys ?: emptySet()) +
                                (noNoiseProps?.keys ?: emptySet()) +
-                               (evalErrors?.keys ?: emptySet())).toSortedSet()
+                               (evalErrors?.keys ?: emptySet()))
+                               .toSortedSet(String.CASE_INSENSITIVE_ORDER)
 
         file.bufferedWriter().use { writer ->
             val header = buildString {
