@@ -150,7 +150,7 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
 
-    val terraGitHash = "c55b0ff"
+    val terraGitHash = "2300000"
 
     bootstrapTerraAddon("com.dfsek.terra:api-addon-loader:0.1.0-BETA-$terraGitHash")
     bootstrapTerraAddon("com.dfsek.terra:manifest-addon-loader:1.0.0-BETA-$terraGitHash")
@@ -417,19 +417,6 @@ tasks.getByName<JavaExec>("run") {
     )
 }
 
-// Copies the static launcher + benchmark scripts (modelled on NoiseTool's
-// StartNoiseTool.bat) to build/libs/ alongside the distributable jar.
-// Includes StartBiomeTool.bat (main launcher), RunBenchmark.bat (benchmark
-// runner with portable jar/Java detection), and ViewTable.bat (CSV viewer).
-val copyLauncherScript by tasks.registering(Copy::class) {
-    group = "distribution"
-    description = "Copies launcher + benchmark scripts to build/libs/"
-    from(rootProject.file("StartBiomeTool.bat"))
-    from(rootProject.file("RunBenchmark.bat"))
-    from(rootProject.file("ViewTable.bat"))
-    into(layout.buildDirectory.dir("libs"))
-}
-
 // Single end-user distribution: one zip the user unzips and runs the launcher
 // from. Contains the cross-platform "-all" jar, launcher + benchmark scripts,
 // and the extracted addons/ and packs/ folders laid out exactly as the
@@ -455,5 +442,5 @@ val distributionZip by tasks.registering(Zip::class) {
 tasks.build {
     dependsOn(javadocJar, sourcesJar)
     dependsOn(project.tasks.withType<ShadowJar>())
-    finalizedBy(prepareDistAddons, prepareDistPacks, copyLauncherScript, distributionZip)
+    finalizedBy(prepareDistAddons, prepareDistPacks, distributionZip)
 }
