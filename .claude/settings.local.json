@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell.exe -Command \"Set-Location C:\\\\Projects\\\\NoiseTool; .\\\\gradlew.bat build --refresh-dependencies\")",
+      "WebFetch(domain:maven.solo-studios.ca)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:repo.codemc.org)",
+      "WebFetch(domain:repo.codemc.io)",
+      "Bash(powershell.exe -Command:*)",
+      "WebFetch(domain:git.dfsek.com)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(tree:*)",
+      "Bash(./gradlew build:*)",
+      "Bash(git rev-list:*)"
+    ]
+  }
+}

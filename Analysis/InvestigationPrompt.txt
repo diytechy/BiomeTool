@@ -1,0 +1,150 @@
+Note: This prompt relates to the same Terra project that was discussed previously in C:\Projects\terra-origen.
+
+Goal: Add functionality into this project that was previously added (for reference at C\Projects\BiomeToolOld)
+
+The functionality in C\Projects\BiomeToolOld was added with the following prompt:
+
+I want to add functionality to this tool so that the user can have a UI toggle to switch between surface, subsurface, and default presentation.  Currently, the default view renders with a y height of 0, which is quite low to the overall world map (-64<y<320)
+
+When this tool opens it currently shows 3 tabs at the top: "World Preview", "Performance", and "Console".
+
+Below this in the "World Preview" option, there is  "Pack" drop down list, and to the right of this there is an option to "Rerender".
+
+Between "Pack" and "Rerender" I want to add another three-way switch with the option "Subsurface" and "Surface".
+
+If "Surface" is selected, I want the BiomeTool to ignore the main extrusion definition from the preset configuration that the tool pulls loads from each pack folder
+
+Refer to BiomeToolOld to see how this was done if more reference is needed, but the functions were simply updated so that "subsurface" checked biomes in steps, and if it changed fromm the surface level biome (height 300), it would be considered subsurface.
+
+Additional functionality NOT included in C\Projects\BiomeToolOld:
+
+I also want the tool to report the average rate at which it's rendering cells / image blocks per second.  I want this metric to show either in the upper right hand side to the right of the "Biome" label, but it could also appear on the rendering itself with a text overlay).  The metric should be tracked per world render, should pause when no cells / image blocks are being rendered, and should unpause if the view port is changed resulting in the need for new cell / image blocks to render.  The metric must reset whenever a render is refreshed.
+
+
+The main purpose of this project is to read in pack files and determine how to distribute biomes into a minecraft map.  As an example from "packs/terra_origins/biomes/tropical-rainforest/biome_distribution.yaml":
+      tropical-rainforest:
+        - tropical-rainforest-flat: 1
+        - tropical-rainforest: 1
+        - tropical-rainforest: 1
+        - tropical-rainforest-highlands: 1
+
+Output needs to be normalized?  Or just take advantage of scalable breakdown?
+
++ Should output be scale by elevation or temperature first?
+
+####################################################3
+
+
+Plan for some updates to the BiomeTool C:\Projects\BiomeTool:
+Each thread should prefer to fill the big-chunk (256x256 world grid, or 16 chunk x 16 chunk square, skipping chunks that are outside the view window) to take better advantage of Dendry noise caching, instead of what appears to be each 16x16 chunk block that are closest to the last viewed region.
+
+Investigate performance issues with BiomeTool:
+When launching the current configuration (via C:\Projects\BiomeTool\CopyPacksAndLaunchLatestBuild.bat) it takes almost a minute to load.
+
+#########################################################
+
+You were interrupted in the middle of some updates:
+
+1. Sometimes the coordinates shown to the left of the biome become hidden / obscured as the biome label changes and shifts other information.
+As a solution to this, can the "Random Seed" dedicated button be removed / hidden, and then allow the current label for "Seed" to also act as a button to trigger generation of a new random seed.
+
+2. Next to the tab "Console" tab there should be a tab "Distribution" which includes in it's view:
+A. A button to change the view between "Surface" and "Subsurface".
+B. A table of values with the biome name in the first column, and in the second column the % of area that the corresponding biome has been rendered on the map.
+C. This information would be in sync with the tile view, so each new tile that renders also has this corresponding set of metrics evaluated, and vice versa if the user is on the render tab or the distribution tab.
+
+This was the to-do list you had generated and were in the process of implementing, most of it may already be complete:
+
+Update Todos
+
+Remove Random Seed button, make Seed label clickable
+
+Add biome distribution tracking to TerraBiomeImageGenerator
+
+Expose biome generator from MapView
+
+Add Distribution tab to BiomeToolView
+
+Wire up distribution updates and tab sync
+
+##########################################
+
+Plan for 3 updates:
+
+1. In the distribution tab, all biomes should be included even if they have not been allocated to in the pipeline yet.
+2. In the distribution tab, include an "Export" tab that saves the current distribution to a csv file, sorted alphabetically.
+3. Create a test script that can be launched with a batch file that can compute the tile render time (tiles per second) give a defined number of tiles (default 100x100) and a defined seed (default 1).  I will use this batch script to test different versions of Terra to see if the updates that have been made there are improving the biome pipeline performance.
+
+#########################################
+
+I want you to build a plan to perform a deep investigation on current performance reductions I've seen in Terra since the last update.
+
+The Terra build is located at "C:\Projects\Terra"
+The Terra pack I am evaluating (Called "CHIMERA") is located at "C:\Projects\ORIGEN2"
+
+The following commits describe the different states and will be referenced in the test results:
+Terra with auto-caching - Commit b00368d7d
+Terra without auto-caching - Commit 09bc6ecfaf
+CHIMERA with manually defined cache samplers   - Commit 3a40124ed
+CHIMERA with manual cache samplers removed - Commit 89e73f852
+
+I have tested the following combinations with RunBenchmark.bat:
+Terra without auto-caching with CHIMERA and manually defined caches - 18.3 Tiles / second
+Terra with auto-caching and CHIMERA with manually defined caches - 18.3 Tiles / second
+Terra with auto-caching and CHIMERA with manual caches removed - 13.6 Tiles / second
+
+I did not expect any performance drop with auto-caching.  Even if it's memory construction / destruction, I would expect that impact to be negligible.
+
+Please perform a thorough review and create any test scripts / debugs necessary to drill into this decrease in performance with auto-caching in Terra.
+
+######################################3
+
+When I run "CopyPacksAndLaunchLatestBuild.bat", I see "Final reference counts:" and "riverSampler=0", but "riverSampler" is used over 10 times in the pack that is copied over and used in BiomeTool.
+
+Can you investigate why the recent auto-caching implementation in Terra (C:\Projects\Terra) does not appear to assess "riverSampler" accurately?
+
+########################################
+
+I have updated Terra to Java 25 along with other updates (Terra short hash c811cc243), please update the BiomeTool to use this new Terra version and update it and gardlew to compile BiomeTool with Java version 25
+
+####################################
+
+Update the BiomeTool's "C:\Projects\BiomeTool\RunBenchmark.bat" benchmark and corresponding file so that running a benchmark ALSO saves a csv file that indicates each surface level biome that was output (for each sample point) and how many times / how many points on the that biome was found.  This should check each sample point on the surface and subsurface.
+
+Additionally, when opening BiomeTool, make sure the "seed" value is restored from the last time BiomeTool was run.
+
+###########################################
+
+Are tile images rendered for all LOD on a single tile query?  Are those basically just levels? (1 pixel per 1 x 1 block vs 1 pixel per 2x2 block)
+
+###################################
+
+When the BiomeBenchmark tool is running, is it sampling at each coordinate position?  (1,1 -> 1,2) until it hits the edge of the tile and continues down to the next row?
+
+#######################################
+
+I want to make a plan for the BiomeTool to be more representative of biome queries.  The external tool (typically minecraft) normally queries every 4th coordinate, which does not match this tool's benchmark or rendering.
+
+Make a plan for the following:
+
+1. Create a new tab called "Settings" with a "Subsample" entry with a drop down menu (1x, 2x, 4x, 8x, 16x, 32x) with a default value of 4x
+
+1a. When the user selects a new value here, it should wipe out all renders / caches.
+
+1b. All tile rendering should now render at this resolution step size (ex: if set to 2x, query 0,0, then 2,0, etc).
+
+1c. Update the BiomeBenchmark.bat to also allow this as an input as an argument to BiomeBenchmark.kt.
+
+1d. Render tiles according to this resolution.  But tiles should now default to 32x32 size (such that at a default subsample entry of 4x, will result in the tile covering a real map area of 128 x 128)
+
+2. Add logic to compress invisible tiles or tiles that are no longer shown at the current LOD.
+
+3. Consider adding higher LOD values to better support highly zoomed out views.
+
+##################################
+
+The current benchmark displays tile rates far away from the tile rates shown in the UI.  Where the UI sometimmes shows upwards of 11 tiles per second, but the benchmark sits around 3 tiles per second.  Even when I simplify the sampler greatly, the UI will show up to almost 40 tiles per second, but the benchmark will max out around 4 tiles / second.  I believe the UI is multithreaded, but I would not expect this much of a difference, can you verify there is not a defect in the benchmark / timers?  What else could explain the in UI tile rate being so much higher than the benchmark?
+
+
+
+Note latest plan omits any updates to handle compression, but that can be performed later, any may not be as necessary.

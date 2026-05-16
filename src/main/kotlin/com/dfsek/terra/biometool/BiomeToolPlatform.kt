@@ -1,7 +1,6 @@
 package com.dfsek.terra.biometool
 
 import com.dfsek.tectonic.api.TypeRegistry
-import com.dfsek.tectonic.api.depth.DepthTracker
 import com.dfsek.tectonic.api.loader.ConfigLoader
 import com.dfsek.terra.AbstractPlatform
 import com.dfsek.terra.api.world.biome.PlatformBiome
@@ -19,12 +18,13 @@ object BiomeToolPlatform : AbstractPlatform() {
     init {
         logger.info { "Root directory: ${dataFolder.absoluteFile}" }
         load()
+        profiler.start()
         logger.info { "Enabled Terra platform." }
     }
     
     override fun reload(): Boolean {
         terraConfig.load(this)
-        return rawConfigRegistry.loadAll(this)
+        return loadConfigPacks()
     }
     
     override fun platformName(): String {
@@ -40,7 +40,7 @@ object BiomeToolPlatform : AbstractPlatform() {
     
     override fun register(registry: TypeRegistry?) {
         super.register(registry)
-        registry?.registerLoader(PlatformBiome::class.java) { _: AnnotatedType, _: Any, _: ConfigLoader, _: DepthTracker ->
+        registry?.registerLoader(PlatformBiome::class.java) { _: AnnotatedType, _: Any, _: ConfigLoader ->
             return@registerLoader DummyPlatformBiome
         }
     }

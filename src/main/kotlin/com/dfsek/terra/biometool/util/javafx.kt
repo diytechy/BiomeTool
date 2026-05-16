@@ -9,7 +9,6 @@ import tornadofx.attachTo
 fun EventTarget.mapview(
     scope: CoroutineScope,
     tileGenerator: BiomeImageGenerator,
-    tileSize: Int = 128,
     op: MapView.() -> Unit = {},
-                       ) = MapView(scope, tileGenerator, tileSize).attachTo(this, op) {
+                       ) = MapView(scope, tileGenerator).attachTo(this, op) {
 }
