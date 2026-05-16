@@ -46,6 +46,7 @@ object BiomeBenchmark {
         val lod          = args.getOrNull(5)?.toIntOrNull() ?: 0
         val threadCount      = (args.getOrNull(6)?.toIntOrNull() ?: 4).coerceAtLeast(1)
         val overflowEnabled  = (args.getOrNull(7)?.toIntOrNull() ?: 1) != 0
+        val packName     = args.getOrNull(8)?.takeIf { it.isNotEmpty() } ?: "CHIMERA"
 
         val imageSize     = TILE_PIXEL_SIZE shr lod
         val sampleStep    = subsample shl lod
@@ -76,9 +77,14 @@ object BiomeBenchmark {
             System.exit(1)
         }
 
-        val packKey = packs.first()
+        val packKey = packs.find { it.id == packName }
+            ?: run {
+                System.err.println("ERROR: Pack '$packName' not found. Available packs: ${packs.joinToString { it.id }}")
+                System.exit(1)
+                null
+            }!!
         val pack    = platform.configRegistry[packKey].get()
-        println("Using pack: $packKey")
+        println("Using pack: ${packKey.id}")
         println()
 
         val provider        = pack.biomeProvider

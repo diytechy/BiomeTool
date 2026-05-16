@@ -24,7 +24,9 @@ object BiomeToolPlatform : AbstractPlatform() {
     
     override fun reload(): Boolean {
         terraConfig.load(this)
-        return loadConfigPacks()
+        rawConfigRegistry.clear()
+        rawConfigRegistry.loadAll(this)
+        return true
     }
     
     override fun platformName(): String {
