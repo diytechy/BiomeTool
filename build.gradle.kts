@@ -32,6 +32,14 @@ repositories {
         url = uri("https://repo.repsy.io/mvn/diytechy/dendryterra")
     }
     maven {
+        name = "Repsy-Seismic"
+        url = uri("https://repo.repsy.io/mvn/diytechy/seismic")
+    }
+    maven {
+        name = "Repsy-Tectonic"
+        url = uri("https://repo.repsy.io/mvn/diytechy/tectonic")
+    }
+    maven {
         name = "Solo Studios"
         url = uri("https://maven.solo-studios.ca/releases")
     }
@@ -43,6 +51,15 @@ repositories {
         name = "Jitpack"
         url = uri("https://jitpack.io")
     }
+}
+
+// Force the patched Seismic version to win over the seismic:2.5.7 brought in transitively by Terra.
+// Maven version ordering treats "2.5.7-PATCHED" as a pre-release (lower) than "2.5.7", so without
+// this force Gradle would downgrade to the unpatched release.
+configurations.all {
+    resolutionStrategy.force("com.dfsek:seismic:2.5.7-PATCHED")
+    resolutionStrategy.force("com.dfsek.tectonic:yaml:4.3.2-diytechy")
+    resolutionStrategy.force("com.dfsek.tectonic:common:4.3.2-diytechy")
 }
 
 java {
@@ -127,7 +144,7 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
 
-    val terraGitHash = "1466f345e"
+    val terraGitHash = "c55b0ff"
 
     bootstrapTerraAddon("com.dfsek.terra:api-addon-loader:0.1.0-BETA-$terraGitHash")
     bootstrapTerraAddon("com.dfsek.terra:manifest-addon-loader:1.0.0-BETA-$terraGitHash")
@@ -165,11 +182,12 @@ dependencies {
     terraAddon("com.dfsek.terra:structure-terrascript-loader:1.2.0-BETA-$terraGitHash")
     terraAddon("com.dfsek.terra:terrascript-function-check-noise-3d:1.0.1-BETA-$terraGitHash")
     terraAddon("com.dfsek.terra:terrascript-function-sampler:1.0.0-BETA-$terraGitHash")
-    terraAddon("com.github.diytechy:dendryterra:1.0.0-BETA-F")
+    terraAddon("com.github.diytechy:dendryterra:1.0.0-BETA-G")
 
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 
+    implementation("com.dfsek:seismic:2.5.7-PATCHED")
     implementation("com.dfsek.terra:base:7.0.0-BETA-$terraGitHash")
 
     implementation("ca.solo-studios:slf4k:0.5.4")
