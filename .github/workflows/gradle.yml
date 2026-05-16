@@ -1,8 +1,6 @@
 name: Java CI
 
 on:
-  push:
-    branches: [main, master]
   pull_request:
     branches: [main, master]
 
@@ -22,27 +20,14 @@ jobs:
       - uses: burrunan/gradle-cache-action@v3.0.1
         name: Build BiomeTool
         with:
-          arguments: shadowJarAll createLauncherScripts
+          arguments: build
           gradle-version: wrapper
           properties: |
             kotlin.js.compiler=ir
             kotlin.parallel.tasks.in.project=true
 
-      - name: Upload distribution artifacts
-        if: github.event_name == 'pull_request'
+      - name: Upload PR distribution zip
         uses: actions/upload-artifact@v4
         with:
-          name: BiomeTool-${{ github.sha }}
-          path: |
-            build/libs/BiomeTool-*-all.jar
-            build/libs/BiomeTool.bat
-            build/libs/BiomeTool.sh
-
-      - name: Release
-        uses: softprops/action-gh-release@v2.2.2
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: |
-            build/libs/BiomeTool-*-all.jar
-            build/libs/BiomeTool.bat
-            build/libs/BiomeTool.sh
+          name: BiomeTool-PR-${{ github.event.pull_request.number }}-${{ github.sha }}
+          path: build/libs/BiomeTool-*.zip

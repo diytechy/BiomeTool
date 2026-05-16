@@ -3,6 +3,7 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.net.URI
+import java.util.zip.ZipInputStream
 
 plugins {
     application
@@ -26,6 +27,10 @@ repositories {
     maven {
         name = "Repsy-Terra"
         url = uri("https://repo.repsy.io/mvn/diytechy/terra")
+    }
+    maven {
+        name = "Repsy-TerraPacks"
+        url = uri("https://repo.repsy.io/mvn/diytechy/terra-packs")
     }
     maven {
         name = "Repsy-DendryTerra"
@@ -126,6 +131,7 @@ val terraAddon: Configuration by configurations.creating {
 val bootstrapTerraAddon: Configuration by configurations.creating {
     runtimeClasspath.extendsFrom(this)
 }
+val defaultPacks: Configuration by configurations.creating
 
 gradle.taskGraph.whenReady {
     val terraModule = configurations.compileClasspath.get().resolvedConfiguration
@@ -184,6 +190,12 @@ dependencies {
     terraAddon("com.dfsek.terra:terrascript-function-sampler:1.0.0-BETA-$terraGitHash")
     terraAddon("com.github.diytechy:dendryterra:1.0.0-BETA-G")
 
+    // Default packs from Repsy diytechy/terra-packs. Group / artifactId / version
+    // must match what Terra publishes — see Terra buildSrc DistributionConfig.kt
+    // (groupPath = com/diytechy/terra/packs, artifactId uppercase pack name).
+    defaultPacks("com.diytechy.terra.packs:CHIMERA:0.0.4@zip")
+    defaultPacks("com.diytechy.terra.packs:TARTARUS:1.0.0@zip")
+    defaultPacks("com.diytechy.terra.packs:REIMAGEND:3.0.0@zip")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 
@@ -303,18 +315,47 @@ tasks.withType<Jar>() {
     }
 }
 
-val downloadDefaultPacks by tasks.registering {
+val prepareDefaultPacks by tasks.registering {
     group = "application"
+    description = "Downloads and extracts default Terra packs from Repsy"
 
-    doFirst {
-        val defaultPack = URI("https://github.com/PolyhedralDev/TerraOverworldConfig/releases/download/v1.5.1/default.zip").toURL()
-        val fileName = defaultPack.file.substring(defaultPack.file.lastIndexOf("/"))
+    dependsOn(configurations.named("defaultPacks"))
 
-        file("$runDir/packs/").mkdirs()
+    doLast {
+        val packsDir = file("$runDir/packs/")
+        packsDir.mkdirs()
 
-        defaultPack.openStream().transferTo(file("$runDir/packs/$fileName").outputStream())
+        val packFiles = defaultPacks.resolvedConfiguration.resolvedArtifacts
+        for (artifact in packFiles) {
+            val packZip = artifact.file
+            val packName = artifact.moduleVersion.id.name.uppercase()
+
+            logger.lifecycle("Extracting pack: ${artifact.moduleVersion.id}")
+
+            packsDir.resolve(packName).mkdirs()
+
+            // Extract the zip file
+            packZip.inputStream().use { inputStream ->
+                ZipInputStream(inputStream).use { zis ->
+                    var entry = zis.nextEntry
+                    while (entry != null) {
+                        val entryFile = packsDir.resolve("$packName/${entry.name}")
+                        if (entry.isDirectory) {
+                            entryFile.mkdirs()
+                        } else {
+                            entryFile.parentFile?.mkdirs()
+                            entryFile.outputStream().use { output ->
+                                zis.copyTo(output)
+                            }
+                        }
+                        entry = zis.nextEntry
+                    }
+                }
+            }
+
+            logger.lifecycle("Extracted pack: $packName")
+        }
     }
-
 }
 
 val prepareRunAddons by tasks.registering(Sync::class) {
@@ -355,8 +396,17 @@ val prepareDistAddons by tasks.registering(Sync::class) {
     into(layout.buildDirectory.dir("libs/addons"))
 }
 
+val prepareDistPacks by tasks.registering(Sync::class) {
+    group = "distribution"
+    description = "Copies packs to build/libs for standalone JAR usage"
+
+    dependsOn(prepareDefaultPacks)
+    from(file("$runDir/packs"))
+    into(layout.buildDirectory.dir("libs/packs"))
+}
+
 tasks.getByName<JavaExec>("run") {
-    dependsOn(prepareRunAddons, downloadDefaultPacks)
+    dependsOn(prepareRunAddons, prepareDefaultPacks)
     runDir.mkdirs()
 
     workingDir = runDir
@@ -367,135 +417,43 @@ tasks.getByName<JavaExec>("run") {
     )
 }
 
-val createLauncherScripts by tasks.registering {
+// Copies the static launcher + benchmark scripts (modelled on NoiseTool's
+// StartNoiseTool.bat) to build/libs/ alongside the distributable jar.
+// Includes StartBiomeTool.bat (main launcher), RunBenchmark.bat (benchmark
+// runner with portable jar/Java detection), and ViewTable.bat (CSV viewer).
+val copyLauncherScript by tasks.registering(Copy::class) {
     group = "distribution"
-    description = "Creates launcher scripts for standalone JAR execution"
-
-    doLast {
-        val libsDir = project.layout.buildDirectory.dir("libs").get().asFile
-
-        // Windows batch script
-        libsDir.resolve("BiomeTool.bat").writeText("""
-@echo off
-setlocal enabledelayedexpansion
-set "SCRIPT_DIR=%~dp0"
-set "JAVA_EXE="
-
-rem --- Try java on PATH first ---
-where java >nul 2>&1
-if !errorlevel! equ 0 call :check_version java
-if defined JAVA_EXE goto :launch
-
-rem --- Search common Java 25 install locations ---
-call :search_dir "%ProgramFiles%\Eclipse Adoptium"
-if defined JAVA_EXE goto :launch
-call :search_dir "%ProgramFiles%\Microsoft"
-if defined JAVA_EXE goto :launch
-call :search_dir "%ProgramFiles%\Java"
-if defined JAVA_EXE goto :launch
-call :search_dir "%ProgramFiles%\BellSoft"
-if defined JAVA_EXE goto :launch
-call :search_dir "%ProgramFiles%\Amazon Corretto"
-if defined JAVA_EXE goto :launch
-call :search_dir "%ProgramFiles%\SapMachine"
-if defined JAVA_EXE goto :launch
-for /d %%J in ("%ProgramFiles%\Azul Systems\Zulu\zulu25*") do (
-    if exist "%%~J\bin\java.exe" if not defined JAVA_EXE call :check_version "%%~J\bin\java.exe"
-)
-if defined JAVA_EXE goto :launch
-
-echo ERROR: Java 25 not found.
-echo Please install Java 25 and ensure it is on your PATH.
-echo Download from: https://adoptium.net/
-pause
-exit /b 1
-
-:launch
-echo Using Java: !JAVA_EXE!
-"!JAVA_EXE!" --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED -jar "%SCRIPT_DIR%BiomeTool-${project.version}-all.jar" %*
-set "EXIT_CODE=!errorlevel!"
-if !EXIT_CODE! neq 0 (
-    echo.
-    echo BiomeTool exited with error code !EXIT_CODE!
-    pause
-)
-exit /b !EXIT_CODE!
-
-:search_dir
-for /d %%J in ("%~1\jdk-25*" "%~1\jre-25*" "%~1\jdk25*") do (
-    if exist "%%~J\bin\java.exe" if not defined JAVA_EXE call :check_version "%%~J\bin\java.exe"
-)
-exit /b 0
-
-:check_version
-set "_JVER="
-"%~1" -version >"%TEMP%\_jver_check.txt" 2>&1
-for /f "tokens=3" %%v in ('findstr /i "version" "%TEMP%\_jver_check.txt"') do (
-    if not defined _JVER set "_JVER=%%~v"
-)
-del "%TEMP%\_jver_check.txt" >nul 2>&1
-if not defined _JVER exit /b 0
-for /f "delims=." %%m in ("!_JVER!") do if "%%m" == "25" set "JAVA_EXE=%~1"
-exit /b 0
-""".trimIndent())
-
-        // Unix shell script
-        libsDir.resolve("BiomeTool.sh").writeText("""
-#!/bin/bash
-SCRIPT_DIR="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
-JAVA_EXE=""
-
-check_version() {
-    local java_bin="${'$'}1"
-    local ver major
-    ver=${'$'}("${'$'}java_bin" -version 2>&1 | grep -i 'version' | head -1 | sed 's/.*version "\([^"]*\)".*/\1/')
-    major=${'$'}(echo "${'$'}ver" | cut -d'.' -f1)
-    if [ "${'$'}major" = "25" ]; then
-        JAVA_EXE="${'$'}java_bin"
-    fi
+    description = "Copies launcher + benchmark scripts to build/libs/"
+    from(rootProject.file("StartBiomeTool.bat"))
+    from(rootProject.file("RunBenchmark.bat"))
+    from(rootProject.file("ViewTable.bat"))
+    into(layout.buildDirectory.dir("libs"))
 }
 
-# Try java on PATH first
-if command -v java >/dev/null 2>&1; then
-    check_version "${'$'}(command -v java)"
-fi
+// Single end-user distribution: one zip the user unzips and runs the launcher
+// from. Contains the cross-platform "-all" jar, launcher + benchmark scripts,
+// and the extracted addons/ and packs/ folders laid out exactly as the
+// launcher expects them at runtime.
+val distributionZip by tasks.registering(Zip::class) {
+    group = "distribution"
+    description = "Bundles jar + addons + packs + launcher scripts into a single distributable zip"
+    dependsOn(shadowJarAll, prepareDistAddons, prepareDefaultPacks)
+    archiveFileName.set("BiomeTool-${project.version}.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("libs"))
 
-# Search common Java 25 install locations
-if [ -z "${'$'}JAVA_EXE" ]; then
-    for base in /usr/lib/jvm /usr/local/lib/jvm /opt/java /opt/jdk /usr/java; do
-        if [ -d "${'$'}base" ]; then
-            for jdir in "${'$'}base"/java-25* "${'$'}base"/jdk-25* "${'$'}base"/jdk25*; do
-                [ -x "${'$'}jdir/bin/java" ] && [ -z "${'$'}JAVA_EXE" ] && check_version "${'$'}jdir/bin/java"
-            done
-        fi
-    done
-fi
-
-if [ -z "${'$'}JAVA_EXE" ]; then
-    echo "ERROR: Java 25 not found."
-    echo "Please install Java 25 and ensure it is on your PATH."
-    echo "Download from: https://adoptium.net/"
-    read -rp "Press Enter to exit..." _
-    exit 1
-fi
-
-echo "Using Java: ${'$'}JAVA_EXE"
-"${'$'}JAVA_EXE" --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED \
-    --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED \
-    -jar "${'$'}SCRIPT_DIR/BiomeTool-${project.version}-all.jar" "${'$'}@"
-EXIT_CODE=${'$'}?
-if [ ${'$'}EXIT_CODE -ne 0 ]; then
-    echo ""
-    echo "BiomeTool exited with error code ${'$'}EXIT_CODE"
-    read -rp "Press Enter to exit..." _
-fi
-exit ${'$'}EXIT_CODE
-""".trimIndent())
+    val bundleRoot = "BiomeTool-${project.version}"
+    into(bundleRoot) {
+        from(shadowJarAll)
+        from(rootProject.file("StartBiomeTool.bat"))
+        from(rootProject.file("RunBenchmark.bat"))
+        from(rootProject.file("ViewTable.bat"))
+        from(layout.buildDirectory.dir("libs/addons")) { into("addons") }
+        from(file("$runDir/packs")) { into("packs") }
     }
 }
 
 tasks.build {
     dependsOn(javadocJar, sourcesJar)
     dependsOn(project.tasks.withType<ShadowJar>())
-    finalizedBy(prepareDistAddons, createLauncherScripts)
+    finalizedBy(prepareDistAddons, prepareDistPacks, copyLauncherScript, distributionZip)
 }
