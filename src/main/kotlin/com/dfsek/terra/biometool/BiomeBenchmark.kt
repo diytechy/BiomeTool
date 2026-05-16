@@ -111,9 +111,10 @@ object BiomeBenchmark {
         val snakeOrder = buildSnakeOrder(tilesX, tilesY, tileWorldSize)
 
         // Warm-up: first 4 tiles, single-threaded, no overflow collection.
+        // LongArray(1) counters avoid the per-pixel Long autoboxing that HashMap.merge does.
         println("Warming up (4 tiles)...")
-        val warmupSurface    = HashMap<String, Long>()
-        val warmupSubsurface = HashMap<String, Long>()
+        val warmupSurface    = HashMap<String, LongArray>()
+        val warmupSubsurface = HashMap<String, LongArray>()
         for ((tx, ty) in snakeOrder.take(4)) {
             renderTile(provider, surfaceProvider, tx, ty, originX, originZ, seed, subsample, imageSize, sampleStep, surfaceY,
                 warmupSurface, warmupSubsurface, checker = null)
@@ -131,8 +132,8 @@ object BiomeBenchmark {
 
         val futures = segments.map { segment ->
             executor.submit(Callable {
-                val localSurface    = HashMap<String, Long>()
-                val localSubsurface = HashMap<String, Long>()
+                val localSurface    = HashMap<String, LongArray>()
+                val localSubsurface = HashMap<String, LongArray>()
                 for ((tileX, tileY) in segment) {
                     renderTile(provider, surfaceProvider, tileX, tileY, originX, originZ, seed, subsample,
                         imageSize, sampleStep, surfaceY, localSurface, localSubsurface, overflowChecker)
@@ -157,13 +158,14 @@ object BiomeBenchmark {
         val elapsedMs  = elapsedNs / 1_000_000.0
         val elapsedSec = elapsedMs / 1000.0
 
-        // Merge per-thread results into final maps.
+        // Merge per-thread results into final maps. Boxing here is fine — it happens
+        // once per (thread × unique biome), not once per pixel.
         val surfaceCounts    = HashMap<String, Long>()
         val subsurfaceCounts = HashMap<String, Long>()
         for (future in futures) {
             val result = future.get()
-            for ((id, count) in result.surfaceCounts)    surfaceCounts.merge(id, count, Long::plus)
-            for ((id, count) in result.subsurfaceCounts) subsurfaceCounts.merge(id, count, Long::plus)
+            for ((id, counter) in result.surfaceCounts)    surfaceCounts.merge(id, counter[0], Long::plus)
+            for ((id, counter) in result.subsurfaceCounts) subsurfaceCounts.merge(id, counter[0], Long::plus)
         }
 
         val tilesPerSecond  = totalTiles / elapsedSec
@@ -263,8 +265,8 @@ object BiomeBenchmark {
     // -------------------------------------------------------------------------
 
     private data class TileRenderResult(
-        val surfaceCounts: HashMap<String, Long>,
-        val subsurfaceCounts: HashMap<String, Long>,
+        val surfaceCounts: HashMap<String, LongArray>,
+        val subsurfaceCounts: HashMap<String, LongArray>,
     )
 
     private fun renderTile(
@@ -279,8 +281,8 @@ object BiomeBenchmark {
         imageSize: Int,
         sampleStep: Int,
         surfaceY: Int,
-        surfaceCounts: HashMap<String, Long>,
-        subsurfaceCounts: HashMap<String, Long>,
+        surfaceCounts: HashMap<String, LongArray>,
+        subsurfaceCounts: HashMap<String, LongArray>,
         checker: TerrainOverflowChecker?,
     ) {
         val tileWorldSize = TILE_PIXEL_SIZE * subsample
@@ -293,10 +295,10 @@ object BiomeBenchmark {
                 val pz = worldZ + zi * sampleStep
 
                 val surfaceBiome = surfaceProvider.getBiome(px, surfaceY, pz, seed)
-                surfaceCounts.merge(surfaceBiome.id, 1L, Long::plus)
+                surfaceCounts.getOrPut(surfaceBiome.id) { LongArray(1) }[0]++
 
                 val subsurfaceBiome = provider.getBiome(px, 0, pz, seed)
-                subsurfaceCounts.merge(subsurfaceBiome.id, 1L, Long::plus)
+                subsurfaceCounts.getOrPut(subsurfaceBiome.id) { LongArray(1) }[0]++
 
                 if (checker != null && xi % checker.stride == 0 && zi % checker.stride == 0) {
                     checker.checkPoint(px, pz)

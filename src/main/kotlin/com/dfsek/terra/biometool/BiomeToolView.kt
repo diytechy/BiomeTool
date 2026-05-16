@@ -696,6 +696,8 @@ class BiomeToolView : View("Biome Tool") {
         fun saveSeed(value: String) = prefs.put(PREF_SEED, value)
         fun loadSubsample(): Int = prefs.getInt(PREF_SUBSAMPLE, 4)
         fun saveSubsample(value: Int) = prefs.putInt(PREF_SUBSAMPLE, value)
+
+        private val Y_LEVELS = intArrayOf(270, 240, 210, 180, 150, 120, 90, 60, 30, 0, -30, -60)
     }
     
     internal data class ToolWindows(
@@ -727,8 +729,7 @@ class BiomeToolView : View("Biome Tool") {
             }
             SurfaceMode.SUBSURFACE -> {
                 val surfaceBiome = provider.getBiome(worldX, 300, worldZ, seed)
-                val yLevels = listOf(270, 240, 210, 180, 150, 120, 90, 60, 30, 0, -30, -60)
-                for (y in yLevels) {
+                for (y in Y_LEVELS) {
                     val biome = provider.getBiome(worldX, y, worldZ, seed)
                     if (biome.id != surfaceBiome.id) {
                         return biome.id
