@@ -20,6 +20,18 @@ class TerraBiomeImageGenerator(
         private const val LAND_COLOR = 0xFF228B22.toInt()  // Forest Green
         private const val OCEAN_COLOR = 0xFF000080.toInt() // Navy Blue
         private val Y_LEVELS = intArrayOf(270, 240, 210, 180, 150, 120, 90, 60, 30, 0, -30, -60)
+
+        // Per-thread pixel scratch buffer, shared across all generator instances.
+        // Total retained heap is bounded by (thread count × largest tile pixel
+        // count × 4 bytes) — ~64 KB per thread for a 128×128 tile. setPixels
+        // copies into the image's own buffer synchronously, so reusing the
+        // source array between renders is safe.
+        private val PIXEL_BUFFER: ThreadLocal<IntArray> = ThreadLocal.withInitial { IntArray(0) }
+
+        private fun obtainPixelBuffer(size: Int): IntArray {
+            val buf = PIXEL_BUFFER.get()
+            return if (buf.size >= size) buf else IntArray(size).also { PIXEL_BUFFER.set(it) }
+        }
     }
 
     private val surfaceBiomeCounts = ConcurrentHashMap<String, AtomicLong>()
@@ -35,6 +47,19 @@ class TerraBiomeImageGenerator(
     // Resolving once avoids reflective getMethod/invoke on every pixel in SUBSURFACE mode.
     private val surfaceProvider: BiomeProvider by lazy { resolveSurfaceProvider() }
 
+    // All biome IDs registered by the pack. The registry doesn't change for the life of
+    // the generator, so we walk it once instead of on every getDistribution call (~1Hz).
+    private val registryBiomeIds: Set<String> by lazy {
+        try {
+            val set = HashSet<String>()
+            configPack.getCheckedRegistry(Biome::class.java)
+                .forEach { key, _ -> set.add(key.id) }
+            set
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
     var distributionListener: (() -> Unit)? = null
 
     fun getDistribution(mode: SurfaceMode): List<BiomeDistributionEntry> {
@@ -48,15 +73,10 @@ class TerraBiomeImageGenerator(
         }
         if (total == 0L) return emptyList()
 
-        // Get all biome IDs from the config pack registry
-        val allBiomeIds = mutableSetOf<String>()
-        try {
-            configPack.getCheckedRegistry(com.dfsek.terra.api.world.biome.Biome::class.java)
-                .forEach { key, _ -> allBiomeIds.add(key.id) }
-        } catch (_: Exception) {
-            // Fall back to only showing observed biomes
-        }
-        // Also include any observed biomes (in case registry lookup missed some)
+        // Union the cached registry IDs with any observed-but-not-registered biomes.
+        // Sized up front so HashSet doesn't grow/rehash during addAll.
+        val allBiomeIds = HashSet<String>(registryBiomeIds.size + counts.size)
+        allBiomeIds.addAll(registryBiomeIds)
         allBiomeIds.addAll(counts.keys)
 
         return allBiomeIds
@@ -77,7 +97,10 @@ class TerraBiomeImageGenerator(
         val worldX = tileX * (tileSize * subsampleFactor)
         val worldY = tileY * (tileSize * subsampleFactor)
 
-        val pixels = IntArray(imageSize * imageSize)
+        // Reuse a per-thread scratch buffer instead of allocating ~64 KB per tile.
+        // setPixels only reads imageSize × imageSize entries, so a larger buffer's
+        // tail is ignored.
+        val pixels = obtainPixelBuffer(imageSize * imageSize)
 
         // LongArray(1) acts as a mutable long counter. This avoids the Long autoboxing
         // that HashMap<String, Long>.merge does on every pixel — one allocation per

@@ -452,15 +452,19 @@ class BiomeToolView : View("Biome Tool") {
     }
 
     private val profilerUpdateTimeline = Timeline(KeyFrame(Duration.millis(500.0), {
-        try {
-            val timings = BiomeToolPlatform.profiler.timings
-            if (timings.isNotEmpty()) {
-                val scrollTop = performanceTextArea.scrollTop
-                performanceTextArea.text = buildProfilerTable(timings)
-                performanceTextArea.scrollTop = scrollTop
+        // Skip the table rebuild entirely when the Performance tab isn't visible —
+        // formatTable allocates row arrays + a StringBuilder every tick.
+        if (toolWindows.performance.isSelected) {
+            try {
+                val timings = BiomeToolPlatform.profiler.timings
+                if (timings.isNotEmpty()) {
+                    val scrollTop = performanceTextArea.scrollTop
+                    performanceTextArea.text = buildProfilerTable(timings)
+                    performanceTextArea.scrollTop = scrollTop
+                }
+            } catch (_: ConcurrentModificationException) {
+                // Skip this cycle
             }
-        } catch (_: ConcurrentModificationException) {
-            // Skip this cycle
         }
     })).apply {
         cycleCount = Animation.INDEFINITE
@@ -468,7 +472,9 @@ class BiomeToolView : View("Biome Tool") {
     }
 
     private val distributionUpdateTimeline = Timeline(KeyFrame(Duration.millis(1000.0), {
-        updateDistributionDisplay()
+        if (toolWindows.distribution.isSelected) {
+            updateDistributionDisplay()
+        }
     })).apply {
         cycleCount = Animation.INDEFINITE
         play()
