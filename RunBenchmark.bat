@@ -10,20 +10,21 @@ set "JAVA_EXE="
 
 :: ============================================================================
 :: BiomeTool Benchmark Script
-:: Usage: RunBenchmark.bat [tilesX] [tilesY] [seed] [skipPause] [subsample] [lod] [threads] [overflowCheck]
-:: Defaults: 20x20 tiles, seed 1, subsample 4, lod 0, threads 4, overflowCheck 1
+:: Usage: RunBenchmark.bat [tilesX] [tilesY] [seed] [skipPause] [subsample] [lod] [threads] [overflowCheck] [packName]
+:: Defaults: 100x100 tiles, seed 1, subsample 4, lod 0, threads 4, overflowCheck 1, pack CHIMERA
 ::
 :: subsample and lod mirror the UI: world area per tile = 128 * subsample (blocks),
 :: lod halves pixel count and doubles stride, matching TerraBiomeImageGenerator exactly.
 ::
 :: threads:       number of concurrent worker threads (default 4).
 :: overflowCheck: 1 = enabled (default), 0 = disabled (use 0 for fair speed comparison with the UI).
+:: packName:      config pack to benchmark (default CHIMERA). Use 'RunBenchmark.bat . . . . . . . . PACK_ID'.
 ::
 :: Examples:
-::   RunBenchmark.bat                          (20x20 tiles, seed 1, 4 threads, overflow ON)
-::   RunBenchmark.bat 50                       (50x50 tiles, seed 1, 4 threads, overflow ON)
-::   RunBenchmark.bat 20 20 1 0 4 0 1 0        (20x20, overflow DISABLED — matches UI workload)
-::   RunBenchmark.bat 200 200 1 0 4 0 4 1      (200x200, 4 threads, overflow ON)
+::   RunBenchmark.bat                                    (100x100 tiles, seed 1, 4 threads, CHIMERA pack)
+::   RunBenchmark.bat 50                                (50x50 tiles, seed 1, 4 threads, CHIMERA pack)
+::   RunBenchmark.bat 20 20 1 0 4 0 1 0                 (20x20, overflow DISABLED — matches UI workload)
+::   RunBenchmark.bat 200 200 1 0 4 0 4 1 REIMAGEND     (200x200, 4 threads, REIMAGEND pack)
 :: ============================================================================
 
 set "TILES_X=%~1"
@@ -34,8 +35,9 @@ set "SUBSAMPLE=%~5"
 set "LOD=%~6"
 set "THREADS=%~7"
 set "OVERFLOW_CHECK=%~8"
+set "PACK_NAME=%~9"
 
-if "%TILES_X%"==""        set "TILES_X=20"
+if "%TILES_X%"==""        set "TILES_X=10"
 if "%TILES_Y%"==""        set "TILES_Y=%TILES_X%"
 if "%SEED%"==""           set "SEED=1"
 if "%SKIP_PAUSE%"==""     set "SKIP_PAUSE=0"
@@ -43,6 +45,7 @@ if "%SUBSAMPLE%"==""      set "SUBSAMPLE=4"
 if "%LOD%"==""            set "LOD=0"
 if "%THREADS%"==""        set "THREADS=4"
 if "%OVERFLOW_CHECK%"=="" set "OVERFLOW_CHECK=1"
+if "%PACK_NAME%"==""      set "PACK_NAME=CHIMERA"
 
 :: ── 1. Optional dev-mode pack sync ───────────────────────────────────────────
 :: Only run CopyPacks.bat if it exists (developer environment with ORIGEN2 source).
@@ -117,14 +120,16 @@ echo.
 :: Pack name is appended by the tool at runtime: benchmark_{PACK}.csv (stable for diffing).
 set "CSV_PREFIX=%SCRIPT_DIR%benchmark_"
 
-echo  Launching benchmark: %TILES_X%x%TILES_Y% tiles, seed %SEED%, subsample %SUBSAMPLE%x, lod %LOD%, %THREADS% thread(s), overflow=%OVERFLOW_CHECK%
+echo  Launching benchmark: %TILES_X%x%TILES_Y% tiles, seed %SEED%, subsample %SUBSAMPLE%x, lod %LOD%, %THREADS% thread(s), overflow=%OVERFLOW_CHECK%, pack %PACK_NAME%
 echo.
 
-cd /d "%JAR_FILE%\.."
+for %%F in ("%JAR_FILE%") do set "JAR_DIR=%%~dpF"
+cd /d "!JAR_DIR!"
+
 "!JAVA_EXE!" --add-opens=javafx.graphics/javafx.scene=ALL-UNNAMED ^
     --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED ^
     -cp "%JAR_FILE%" com.dfsek.terra.biometool.BiomeBenchmark ^
-    %TILES_X% %TILES_Y% %SEED% "%CSV_PREFIX%" %SUBSAMPLE% %LOD% %THREADS% %OVERFLOW_CHECK%
+    %TILES_X% %TILES_Y% %SEED% "%CSV_PREFIX%" %SUBSAMPLE% %LOD% %THREADS% %OVERFLOW_CHECK% %PACK_NAME%
 
 set "EXIT_CODE=!errorlevel!"
 echo.
