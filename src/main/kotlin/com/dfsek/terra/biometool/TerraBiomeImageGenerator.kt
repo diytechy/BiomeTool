@@ -19,13 +19,21 @@ class TerraBiomeImageGenerator(
     companion object {
         private const val LAND_COLOR = 0xFF228B22.toInt()  // Forest Green
         private const val OCEAN_COLOR = 0xFF000080.toInt() // Navy Blue
-        private val Y_LEVELS = listOf(270, 240, 210, 180, 150, 120, 90, 60, 30, 0, -30, -60)
+        private val Y_LEVELS = intArrayOf(270, 240, 210, 180, 150, 120, 90, 60, 30, 0, -30, -60)
     }
 
     private val surfaceBiomeCounts = ConcurrentHashMap<String, AtomicLong>()
     private val subsurfaceBiomeCounts = ConcurrentHashMap<String, AtomicLong>()
     private val surfaceTotalPixels = AtomicLong(0)
     private val subsurfaceTotalPixels = AtomicLong(0)
+
+    // Cache: biome.id -> whether the ID matches any ocean-ish keyword.
+    // Bounded by the number of unique biome IDs in the pack (small).
+    private val oceanBiomeCache = ConcurrentHashMap<String, Boolean>()
+
+    // The surface (unwrapped 2D) provider is stable for the lifetime of the generator.
+    // Resolving once avoids reflective getMethod/invoke on every pixel in SUBSURFACE mode.
+    private val surfaceProvider: BiomeProvider by lazy { resolveSurfaceProvider() }
 
     var distributionListener: (() -> Unit)? = null
 
@@ -71,8 +79,11 @@ class TerraBiomeImageGenerator(
 
         val pixels = IntArray(imageSize * imageSize)
 
-        val localSurfaceCounts = HashMap<String, Long>()
-        val localSubsurfaceCounts = HashMap<String, Long>()
+        // LongArray(1) acts as a mutable long counter. This avoids the Long autoboxing
+        // that HashMap<String, Long>.merge does on every pixel — one allocation per
+        // unique biome instead of two boxes per pixel.
+        val localSurfaceCounts = HashMap<String, LongArray>()
+        val localSubsurfaceCounts = HashMap<String, LongArray>()
 
         when (surfaceMode) {
             SurfaceMode.DEFAULT -> {
@@ -86,12 +97,11 @@ class TerraBiomeImageGenerator(
                             seed
                         )
                         pixels[rowOffset + xi] = biome.color
-                        localSurfaceCounts.merge(biome.id, 1L, Long::plus)
+                        localSurfaceCounts.getOrPut(biome.id) { LongArray(1) }[0]++
                     }
                 }
             }
             SurfaceMode.SURFACE -> {
-                val surfaceProvider = getSurfaceProvider(provider)
                 for (yi in 0 until imageSize) {
                     val rowOffset = yi * imageSize
                     for (xi in 0 until imageSize) {
@@ -99,11 +109,11 @@ class TerraBiomeImageGenerator(
                         val pz = worldY + yi * sampleStep
                         val surfaceBiome = surfaceProvider.getBiome(px, 300, pz, seed)
                         pixels[rowOffset + xi] = surfaceBiome.color
-                        localSurfaceCounts.merge(surfaceBiome.id, 1L, Long::plus)
+                        localSurfaceCounts.getOrPut(surfaceBiome.id) { LongArray(1) }[0]++
 
                         // Also track subsurface biome
                         val subBiomeId = findSubsurfaceBiomeId(px, pz, provider, surfaceBiome)
-                        localSubsurfaceCounts.merge(subBiomeId, 1L, Long::plus)
+                        localSubsurfaceCounts.getOrPut(subBiomeId) { LongArray(1) }[0]++
                     }
                 }
             }
@@ -116,8 +126,8 @@ class TerraBiomeImageGenerator(
                         val result = getSubsurfaceBiomeResult(px, pz, provider)
                         pixels[rowOffset + xi] = result.color
 
-                        localSurfaceCounts.merge(result.surfaceId, 1L, Long::plus)
-                        localSubsurfaceCounts.merge(result.subsurfaceId, 1L, Long::plus)
+                        localSurfaceCounts.getOrPut(result.surfaceId) { LongArray(1) }[0]++
+                        localSubsurfaceCounts.getOrPut(result.subsurfaceId) { LongArray(1) }[0]++
                     }
                 }
             }
@@ -126,14 +136,14 @@ class TerraBiomeImageGenerator(
         val pixelCount = (imageSize * imageSize).toLong()
 
         // Merge local counts into global counts
-        for ((id, count) in localSurfaceCounts) {
-            surfaceBiomeCounts.computeIfAbsent(id) { AtomicLong(0) }.addAndGet(count)
+        for ((id, counter) in localSurfaceCounts) {
+            surfaceBiomeCounts.computeIfAbsent(id) { AtomicLong(0) }.addAndGet(counter[0])
         }
         surfaceTotalPixels.addAndGet(pixelCount)
 
         if (localSubsurfaceCounts.isNotEmpty()) {
-            for ((id, count) in localSubsurfaceCounts) {
-                subsurfaceBiomeCounts.computeIfAbsent(id) { AtomicLong(0) }.addAndGet(count)
+            for ((id, counter) in localSubsurfaceCounts) {
+                subsurfaceBiomeCounts.computeIfAbsent(id) { AtomicLong(0) }.addAndGet(counter[0])
             }
             subsurfaceTotalPixels.addAndGet(pixelCount)
         }
@@ -159,7 +169,6 @@ class TerraBiomeImageGenerator(
     private data class SubsurfaceResult(val color: Int, val surfaceId: String, val subsurfaceId: String)
 
     private fun getSubsurfaceBiomeResult(x: Int, z: Int, provider: BiomeProvider): SubsurfaceResult {
-        val surfaceProvider = getSurfaceProvider(provider)
         val surfaceBiome = surfaceProvider.getBiome(x, 300, z, seed)
         val isOcean = isOceanBiome(surfaceBiome)
 
@@ -175,27 +184,27 @@ class TerraBiomeImageGenerator(
         return SubsurfaceResult(color, surfaceBiome.id, surfaceBiome.id)
     }
 
-    private fun isOceanBiome(biome: Biome): Boolean {
-        val id = biome.id.lowercase()
-        return id.contains("ocean") ||
-               id.contains("sea") ||
-               id.contains("water") ||
-               id.contains("river") ||
-               id.contains("beach") ||
-               id.contains("shore") ||
-               id.contains("trench")
-    }
+    private fun isOceanBiome(biome: Biome): Boolean =
+        oceanBiomeCache.computeIfAbsent(biome.id) { id ->
+            id.contains("ocean",  ignoreCase = true) ||
+            id.contains("sea",    ignoreCase = true) ||
+            id.contains("water",  ignoreCase = true) ||
+            id.contains("river",  ignoreCase = true) ||
+            id.contains("beach",  ignoreCase = true) ||
+            id.contains("shore",  ignoreCase = true) ||
+            id.contains("trench", ignoreCase = true)
+        }
 
-    private fun getSurfaceProvider(provider: BiomeProvider): BiomeProvider {
+    private fun resolveSurfaceProvider(): BiomeProvider {
+        val provider = configPack.biomeProvider
         return try {
             val providerClass = provider::class.java
             if (providerClass.simpleName == "BiomeExtrusionProvider") {
-                val getDelegateMethod = providerClass.getMethod("getDelegate")
-                getDelegateMethod.invoke(provider) as BiomeProvider
+                providerClass.getMethod("getDelegate").invoke(provider) as BiomeProvider
             } else {
                 provider
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             provider
         }
     }
