@@ -37,13 +37,13 @@ set "THREADS=%~7"
 set "OVERFLOW_CHECK=%~8"
 set "PACK_NAME=%~9"
 
-if "%TILES_X%"==""        set "TILES_X=10"
+if "%TILES_X%"==""        set "TILES_X=100"
 if "%TILES_Y%"==""        set "TILES_Y=%TILES_X%"
-if "%SEED%"==""           set "SEED=1"
+if "%SEED%"==""           set "SEED=7099699057166038826"
 if "%SKIP_PAUSE%"==""     set "SKIP_PAUSE=0"
-if "%SUBSAMPLE%"==""      set "SUBSAMPLE=4"
+if "%SUBSAMPLE%"==""      set "SUBSAMPLE=8"
 if "%LOD%"==""            set "LOD=0"
-if "%THREADS%"==""        set "THREADS=4"
+if "%THREADS%"==""        set "THREADS=8"
 if "%OVERFLOW_CHECK%"=="" set "OVERFLOW_CHECK=1"
 if "%PACK_NAME%"==""      set "PACK_NAME=CHIMERA"
 
@@ -53,9 +53,9 @@ if "%PACK_NAME%"==""      set "PACK_NAME=CHIMERA"
 if exist "%SCRIPT_DIR%CopyPacks.bat" (
     if exist "%SCRIPT_DIR%..\ORIGEN2\" (
         echo  Detected ORIGEN2 source — syncing packs via CopyPacks.bat...
-        call "%SCRIPT_DIR%CopyPacks.bat"
     )
 )
+        ::call "%SCRIPT_DIR%CopyPacks.bat"
 
 :: ── 2. Find the JAR ──────────────────────────────────────────────────────────
 set "JAR_FILE="
