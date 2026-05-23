@@ -117,12 +117,19 @@ class BiomeToolView : View("Biome Tool") {
     private var loadingOverlay by singleAssign<StackPane>()
 
     private var loadingLogView by singleAssign<LoadingLogView>()
+
+    private var loadingProgress by singleAssign<ProgressIndicator>()
+
+    private var loadingStatusLabel by singleAssign<Label>()
     
     init {
         logger.info { "Initializing Terra platform..." }
         platform = BiomeToolPlatform
-        platform.reload()
-        logger.info { "Terra platform initialized successfully" }
+        if (platform.reload()) {
+            logger.info { "Terra platform initialized successfully" }
+        } else {
+            logger.info { "Terra platform initialized with pack load failures — see error logs above" }
+        }
     }
     
     override val root = stackpane {
@@ -365,22 +372,29 @@ class BiomeToolView : View("Biome Tool") {
         loadingOverlay = stackpane {
             style = "-fx-background-color: rgba(0, 0, 0, 0.7);"
             isVisible = false
-            
+
             vbox(10.0) {
                 alignment = Pos.CENTER
                 padding = Insets(0.0, 0.0, 50.0, 0.0)
-                
-                add(ProgressIndicator().apply {
+
+                loadingProgress = ProgressIndicator().apply {
                     maxWidth = 50.0
                     maxHeight = 50.0
-                })
-                label("Reloading packs...") {
+                }
+                add(loadingProgress)
+                loadingStatusLabel = label("Reloading packs...") {
                     style = "-fx-text-fill: white; -fx-font-size: 14px;"
                 }
                 loadingLogView = LoadingLogView().apply {
                     padding = Insets(20.0, 0.0, 0.0, 0.0)
                 }
                 add(loadingLogView)
+            }
+
+            setOnMouseClicked {
+                if (!loadingProgress.isVisible) {
+                    isVisible = false
+                }
             }
         }
     }
@@ -564,23 +578,26 @@ class BiomeToolView : View("Biome Tool") {
         renderTabs.tabs.clear()
         
         loadingLogView.clear()
+        loadingProgress.isVisible = true
+        loadingStatusLabel.text = "Reloading packs..."
+        loadingStatusLabel.style = "-fx-text-fill: white; -fx-font-size: 14px;"
         loadingOverlay.isVisible = true
-        
+
         ReloadLogAppender.listener = { message ->
             loadingLogView.addLog(message)
         }
-        
+
         thread {
             platform.profiler.reset()
-            platform.reload()
-            
+            val success = platform.reload()
+
             runLater {
                 ReloadLogAppender.listener = null
-                
+
                 val configs = platform.configRegistry.keys().toList()
                 packSelection.items = configs.toObservable()
                 packSelection.selectionModel.selectFirst()
-                
+
                 for (state in savedStates) {
                     if (platform.configRegistry.contains(state.packKey)) {
                         val pack = platform.configRegistry[state.packKey].get()
@@ -595,12 +612,18 @@ class BiomeToolView : View("Biome Tool") {
                         )
                     }
                 }
-                
+
                 if (selectedTabIndex >= 0 && selectedTabIndex < renderTabs.tabs.size) {
                     renderTabs.selectionModel.select(selectedTabIndex)
                 }
-                
-                loadingOverlay.isVisible = false
+
+                if (success) {
+                    loadingOverlay.isVisible = false
+                } else {
+                    loadingProgress.isVisible = false
+                    loadingStatusLabel.text = "Pack load failed — see Console for details. Click anywhere to dismiss."
+                    loadingStatusLabel.style = "-fx-text-fill: #ff8080; -fx-font-size: 14px; -fx-font-weight: bold;"
+                }
             }
         }
     }
