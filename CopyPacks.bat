@@ -9,6 +9,12 @@ if /i "%COMPUTER%"=="MSI" (
     set "BIOMETOOL_PATH=C:\Projects\BiomeTool\build\libs\packs\CHIMERA"
     set "MINECRAFT_DIR=C:\MC\MINECRAFT_SERVER_TMP_26-1_SPARSE"
     set "WORLD_NAME=c1"
+    
+) else if /i "%COMPUTER%"=="DESKTOP-OFFICE" (
+    set "CHIMERA_SOURCE=C:\Projects\CHIMERA"
+    set "BIOMETOOL_PATH=C:\Projects\BiomeTool\build\libs\packs\CHIMERA"
+    set "MINECRAFT_DIR=Z:\MC_SERV_BACKUP_20260516\MINECRAFT_SERVER_TMP_4BACKUP"
+    set "WORLD_NAME=chimera"
 ) else (
     :: Default configuration
     set "CHIMERA_SOURCE=C:\Projects\CHIMERA"
