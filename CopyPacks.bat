@@ -26,6 +26,7 @@ if /i "%COMPUTER%"=="MSI" (
 :: Construct derived paths
 set "MINECRAFT_PACKS=%MINECRAFT_DIR%\plugins\Terra\packs\CHIMERA"
 set "REGION_DIR=%MINECRAFT_DIR%\world\dimensions\minecraft\%WORLD_NAME%\region"
+set "REGION_DIR=%MINECRAFT_DIR%\this-dir-does-not-exist-so-it-wont-get-removed"
 
 :: Define source and destination folders
 set "SOURCE=%CHIMERA_SOURCE%"
@@ -38,7 +39,7 @@ echo.
 
 :: Copy everything recursively, excluding specified folders
 robocopy "%SOURCE%" "%DEST%" /E ^
-    /XD ".*" "_*" "OldPromptAndReviewReferences" "Review" "build" "gradlew" "memory" ^
+    /XD ".*" "_*" "OldPromptAndReviewReferences" "Review" "build" "gradlew" "memory" "archive-investigations" "com" "gradle" "tools"^
     /R:3 /W:5 /NDL /NJH /NJS /purge
 
 :: Delete all files from destination root EXCEPT the three we want

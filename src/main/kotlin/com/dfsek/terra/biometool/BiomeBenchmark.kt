@@ -47,6 +47,7 @@ object BiomeBenchmark {
         val threadCount      = (args.getOrNull(6)?.toIntOrNull() ?: 4).coerceAtLeast(1)
         val overflowEnabled  = (args.getOrNull(7)?.toIntOrNull() ?: 1) != 0
         val packName     = args.getOrNull(8)?.takeIf { it.isNotEmpty() } ?: "CHIMERA"
+        val packPath     = args.getOrNull(9)?.takeIf { it.isNotEmpty() }?.let { File(it) }
 
         val imageSize     = TILE_PIXEL_SIZE shr lod
         val sampleStep    = subsample shl lod
@@ -63,7 +64,18 @@ object BiomeBenchmark {
         println("Total pixels: ${totalTiles.toLong() * imageSize * imageSize}")
         println("Seed: $seed")
         println("Threads: $threadCount  |  Snake strip: $stripWidth tile(s) wide (${stripWidth * tileWorldSize} world units)")
+        if (packPath != null) println("Pack path: ${packPath.absolutePath}  (single-pack mode)")
         println()
+
+        // Set single-pack override BEFORE the platform singleton is first accessed.
+        // BiomeToolPlatform.init{} calls load() (addons) using the real working dir;
+        // reload() then uses the temp folder built from packPath for pack discovery.
+        if (packPath != null) {
+            require(packPath.isDirectory) {
+                "Pack path '${packPath.absolutePath}' does not exist or is not a directory."
+            }
+            BiomeToolPlatform.singlePackOverride = packPath
+        }
 
         println("Initializing Terra platform...")
         val platform = BiomeToolPlatform
