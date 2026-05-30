@@ -133,9 +133,10 @@ object BiomeBenchmark {
         println("Warming up (4 tiles)...")
         val warmupSurface    = HashMap<String, LongArray>()
         val warmupSubsurface = HashMap<String, LongArray>()
+        val warmupFirst    = HashMap<String, IntArray>()
         for ((tx, ty) in snakeOrder.take(4)) {
             renderTile(provider, surfaceProvider, tx, ty, originX, originZ, seed, subsample, imageSize, sampleStep, surfaceY,
-                warmupSurface, warmupSubsurface, checker = null)
+                warmupSurface, warmupSubsurface, warmupFirst, checker = null)
         }
 
         println("Running benchmark ($threadCount thread${if (threadCount == 1) "" else "s"})...")
@@ -152,12 +153,14 @@ object BiomeBenchmark {
             executor.submit(Callable {
                 val localSurface    = HashMap<String, LongArray>()
                 val localSubsurface = HashMap<String, LongArray>()
+                val localFirst    = HashMap<String, IntArray>()
                 for ((tileX, tileY) in segment) {
                     renderTile(provider, surfaceProvider, tileX, tileY, originX, originZ, seed, subsample,
-                        imageSize, sampleStep, surfaceY, localSurface, localSubsurface, overflowChecker)
+                        imageSize, sampleStep, surfaceY, localSurface, localSubsurface,
+                        localFirst, overflowChecker)
                     tilesCompleted.incrementAndGet()
                 }
-                TileRenderResult(localSurface, localSubsurface)
+                TileRenderResult(localSurface, localSubsurface, localFirst)
             })
         }
         executor.shutdown()
@@ -180,10 +183,14 @@ object BiomeBenchmark {
         // once per (thread × unique biome), not once per pixel.
         val surfaceCounts    = HashMap<String, Long>()
         val subsurfaceCounts = HashMap<String, Long>()
+        // First-seen coordinate per biome. Futures are iterated in segment order, which is
+        // global snake-traversal order, so putIfAbsent keeps the earliest occurrence.
+        val firstCoord = HashMap<String, IntArray>()
         for (future in futures) {
             val result = future.get()
             for ((id, counter) in result.surfaceCounts)    surfaceCounts.merge(id, counter[0], Long::plus)
             for ((id, counter) in result.subsurfaceCounts) subsurfaceCounts.merge(id, counter[0], Long::plus)
+            for ((id, coord) in result.firstCoord) firstCoord.putIfAbsent(id, coord)
         }
 
         val tilesPerSecond  = totalTiles / elapsedSec
@@ -206,7 +213,8 @@ object BiomeBenchmark {
         val samplerStats   = overflowChecker?.getSamplerStats()
         val noNoiseProps   = overflowChecker?.getNoNoisePropsCounts()
         val evalErrors     = overflowChecker?.getEvalErrorCounts()
-        val csvFile  = writeBiomeCsv(packId, csvPrefix, surfaceCounts, subsurfaceCounts, samplerStats, noNoiseProps, evalErrors)
+        val csvFile  = writeBiomeCsv(packId, csvPrefix, surfaceCounts, subsurfaceCounts,
+            firstCoord, samplerStats, noNoiseProps, evalErrors)
         println()
         println("Biome distribution saved to: ${csvFile.absolutePath}")
 
@@ -285,6 +293,7 @@ object BiomeBenchmark {
     private data class TileRenderResult(
         val surfaceCounts: HashMap<String, LongArray>,
         val subsurfaceCounts: HashMap<String, LongArray>,
+        val firstCoord: HashMap<String, IntArray>,
     )
 
     private fun renderTile(
@@ -301,6 +310,7 @@ object BiomeBenchmark {
         surfaceY: Int,
         surfaceCounts: HashMap<String, LongArray>,
         subsurfaceCounts: HashMap<String, LongArray>,
+        firstCoord: HashMap<String, IntArray>,
         checker: TerrainOverflowChecker?,
     ) {
         val tileWorldSize = TILE_PIXEL_SIZE * subsample
@@ -313,10 +323,14 @@ object BiomeBenchmark {
                 val pz = worldZ + zi * sampleStep
 
                 val surfaceBiome = surfaceProvider.getBiome(px, surfaceY, pz, seed)
-                surfaceCounts.getOrPut(surfaceBiome.id) { LongArray(1) }[0]++
+                val surfaceCounter = surfaceCounts[surfaceBiome.id]
+                if (surfaceCounter == null) surfaceCounts[surfaceBiome.id] = longArrayOf(1L) else surfaceCounter[0]++
+                if (!firstCoord.containsKey(surfaceBiome.id)) firstCoord[surfaceBiome.id] = intArrayOf(px, pz)
 
                 val subsurfaceBiome = provider.getBiome(px, 0, pz, seed)
-                subsurfaceCounts.getOrPut(subsurfaceBiome.id) { LongArray(1) }[0]++
+                val subsurfaceCounter = subsurfaceCounts[subsurfaceBiome.id]
+                if (subsurfaceCounter == null) subsurfaceCounts[subsurfaceBiome.id] = longArrayOf(1L) else subsurfaceCounter[0]++
+                if (!firstCoord.containsKey(subsurfaceBiome.id)) firstCoord[subsurfaceBiome.id] = intArrayOf(px, pz)
 
                 if (checker != null && xi % checker.stride == 0 && zi % checker.stride == 0) {
                     checker.checkPoint(px, pz)
@@ -347,6 +361,7 @@ object BiomeBenchmark {
         csvPrefix: String?,
         surfaceCounts: HashMap<String, Long>,
         subsurfaceCounts: HashMap<String, Long>,
+        firstCoord: HashMap<String, IntArray>,
         samplerStats: Map<String, SamplerTiming>? = null,
         noNoiseProps: Map<String, Long>? = null,
         evalErrors: Map<String, Long>? = null,
@@ -366,6 +381,7 @@ object BiomeBenchmark {
         file.bufferedWriter().use { writer ->
             val header = buildString {
                 append("Biome,Surface Count,Surface %,Subsurface Count,Subsurface %")
+                append(",First X,First Z")
                 if (overflowEnabled) append(",Overflow Samples,Avg Sampler µs,No Noise Props,Eval Errors")
             }
             writer.write(header)
@@ -373,8 +389,10 @@ object BiomeBenchmark {
             for (id in allBiomes) {
                 val sc  = surfaceCounts[id] ?: 0L
                 val ssc = subsurfaceCounts[id] ?: 0L
+                val first = firstCoord[id]
                 val row = buildString {
                     append("$id,$sc,${"%.4f".format(sc * 100.0 / surfaceTotal)},$ssc,${"%.4f".format(ssc * 100.0 / subsurfaceTotal)}")
+                    append(",${first?.get(0) ?: ""},${first?.get(1) ?: ""}")
                     if (overflowEnabled) {
                         val st    = samplerStats?.get(id)
                         val count = st?.sampleCount ?: 0L
