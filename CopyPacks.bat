@@ -26,7 +26,7 @@ if /i "%COMPUTER%"=="MSI" (
 :: Construct derived paths
 set "MINECRAFT_PACKS=%MINECRAFT_DIR%\plugins\Terra\packs\CHIMERA"
 set "REGION_DIR=%MINECRAFT_DIR%\world\dimensions\minecraft\%WORLD_NAME%\region"
-set "REGION_DIR=%MINECRAFT_DIR%\this-dir-does-not-exist-so-it-wont-get-removed"
+::set "REGION_DIR=%MINECRAFT_DIR%\this-dir-does-not-exist-so-it-wont-get-removed"
 
 :: Define source and destination folders
 set "SOURCE=%CHIMERA_SOURCE%"
@@ -37,10 +37,24 @@ echo Source: %SOURCE%
 echo Destination: %DEST%
 echo.
 
-:: Copy everything recursively, excluding specified folders
-robocopy "%SOURCE%" "%DEST%" /E ^
-    /XD ".*" "_*" "OldPromptAndReviewReferences" "Review" "build" "gradlew" "memory" "archive-investigations" "com" "gradle" "tools"^
-    /R:3 /W:5 /NDL /NJH /NJS /purge
+:: Pack content allowlist — copy only the dirs/files Terra actually loads, so
+:: newly added repo folders (docs/, tools/, memory/, archive-investigations/,
+:: build artifacts, …) never reach the pack without needing a denylist update.
+:: Keep in sync with CHIMERA's build.gradle.kts (packZip) and .scripts/pack.sh.
+
+:: Wipe destination first to guarantee no stale / non-pack content survives.
+if exist "%DEST%" rmdir /S /Q "%DEST%"
+mkdir "%DEST%"
+
+:: Mirror each pack directory (excluding any hidden/underscore subdirs).
+for %%P in (biomes biome-distribution features palettes math structures) do (
+    robocopy "%SOURCE%\%%P" "%DEST%\%%P" /E ^
+        /XD ".*" "_*" /R:3 /W:5 /NDL /NJH /NJS
+)
+
+:: Copy the allowed root files only.
+robocopy "%SOURCE%" "%DEST%" pack.yml meta.yml customization.yml substratum_meta.yml ^
+    /R:3 /W:5 /NDL /NJH /NJS
 
 :: Delete all files from destination root EXCEPT the three we want
 echo.

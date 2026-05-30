@@ -41,6 +41,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
 import org.slf4j.kotlin.getLogger
 import org.slf4j.kotlin.info
 import tornadofx.View
@@ -573,7 +574,7 @@ class BiomeToolView : View("Biome Tool") {
             state.copy(x = mapView.x, y = mapView.y, zoomLevel = mapView.zoomLevel)
         }
         
-        tabStates.values.forEach { it.mapView.close() }
+        tabStates.values.forEach { it.mapView.close(); it.scope.cancel() }
         tabStates.clear()
         renderTabs.tabs.clear()
         
@@ -654,15 +655,23 @@ class BiomeToolView : View("Biome Tool") {
         val modeLabel = effectiveSurfaceMode.displayName
         return renderTabs.tab("$selectedPack:$seedLong:$modeLabel") {
             select()
-            
-            val mapView = mapview(BiomeToolView.scope, TerraBiomeImageGenerator(seedLong, pack, effectiveSurfaceMode)) {
+
+            // Each tab gets a scope limited to 1 concurrent tile render.
+            // Terra's BiomeProvider has a non-thread-safe internal chunk cache; concurrent
+            // getBiome calls from multiple threads corrupt it and produce wrong biomes for
+            // some tiles (visible as rectangular patches with an unexpected color palette).
+            // limitedParallelism(1) serialises rendering within this tab while still
+            // allowing the shared thread pool to serve other tabs concurrently.
+            val tabScope = CoroutineScope(SupervisorJob() + coroutineDispatcher.limitedParallelism(1))
+
+            val mapView = mapview(tabScope, TerraBiomeImageGenerator(seedLong, pack, effectiveSurfaceMode)) {
                 fitToParentSize()
                 if (initialX != 0.0 || initialY != 0.0 || initialZoom != 0.0) {
                     setPosition(initialX, initialY, initialZoom)
                 }
             }
 
-            tabStates[this] = TabState(selectedPack, seedLong, mapView, initialX, initialY, initialZoom, effectiveSurfaceMode)
+            tabStates[this] = TabState(selectedPack, seedLong, mapView, tabScope, initialX, initialY, initialZoom, effectiveSurfaceMode)
 
             mapView.setSubsampleFactor(loadSubsample())
 
@@ -685,7 +694,10 @@ class BiomeToolView : View("Biome Tool") {
             }
 
             setOnClosed {
-                tabStates.remove(this)?.mapView?.close()
+                tabStates.remove(this)?.let { state ->
+                    state.mapView.close()
+                    state.scope.cancel()
+                }
             }
         }
     }
@@ -741,6 +753,7 @@ class BiomeToolView : View("Biome Tool") {
         val packKey: RegistryKey,
         val seed: Long,
         val mapView: MapView,
+        val scope: CoroutineScope,
         val x: Double = 0.0,
         val y: Double = 0.0,
         val zoomLevel: Double = 0.0,
